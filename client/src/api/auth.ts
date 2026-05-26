@@ -1,78 +1,55 @@
-import { supabase } from '../lib/supabase'
-import type { Profile, UserRole } from '../types/database.types'
+import { AUTH_TOKEN_KEY, apiFetch } from '../lib/api'
+import type { AuthUser, Profile, ProfileUpdate, UserRole } from '../types/database.types'
+
+interface AuthResponse {
+  token: string
+  user: AuthUser
+}
 
 export const authService = {
-  async signUp(email: string, password: string, fullName: string, role: UserRole = 'customer') {
-    try {
-      const { data, error } = await supabase.auth.signUp({
-        email, password,
-        options: { data: { full_name: fullName } },
-      })
-      if (error) throw error
-      if (data.user) {
-        await supabase.from('profiles').update({ role, full_name: fullName }).eq('id', data.user.id)
-        if (role === 'customer') await supabase.from('customers').insert({ user_id: data.user.id })
-      }
-      return data
-    } catch (error) {
-      console.error('Sign up failed:', error)
-      throw error
-    }
+  async signUp(email: string, password: string, fullName: string) {
+    const response = await apiFetch<AuthResponse>('/api/auth/register', {
+      method: 'POST',
+      body: JSON.stringify({ email, password, name: fullName }),
+    })
+    localStorage.setItem(AUTH_TOKEN_KEY, response.token)
+    return response.user
   },
+
   async signIn(email: string, password: string) {
-    try {
-      const { data, error } = await supabase.auth.signInWithPassword({ email, password })
-      if (error) throw error
-      return data
-    } catch (error) {
-      console.error('Sign in failed:', error)
-      throw error
-    }
+    const response = await apiFetch<AuthResponse>('/api/auth/login', {
+      method: 'POST',
+      body: JSON.stringify({ email, password }),
+    })
+    localStorage.setItem(AUTH_TOKEN_KEY, response.token)
+    return response.user
   },
+
   async signOut() {
-    try {
-      const { error } = await supabase.auth.signOut()
-      if (error) throw error
-    } catch (error) {
-      console.error('Sign out failed:', error)
-      throw error
-    }
+    localStorage.removeItem(AUTH_TOKEN_KEY)
+    return null
   },
+
   async getSession() {
     try {
-      const { data } = await supabase.auth.getSession()
-      return data.session
-    } catch (error) {
-      console.warn('Failed to get session:', error)
+      const response = await apiFetch<{ user: AuthUser }>('/api/auth/me')
+      return response.user
+    } catch {
       return null
     }
   },
-  async getProfile(userId: string): Promise<Profile | null> {
-    try {
-      const { data } = await supabase.from('profiles').select('*').eq('id', userId).single()
-      return data
-    } catch (error) {
-      console.warn('Failed to get profile:', error)
-      return null
-    }
+
+  async getProfile() {
+    const session = await authService.getSession()
+    return session?.profile ?? null
   },
-  async updateProfile(userId: string, updates: Partial<Profile>) {
-    try {
-      const { data, error } = await supabase.from('profiles').update(updates).eq('id', userId).select().single()
-      if (error) throw error
-      return data
-    } catch (error) {
-      console.error('Failed to update profile:', error)
-      throw error
-    }
+
+  async updateProfile(userId: string, updates: ProfileUpdate) {
+    void userId
+    void updates
+    throw new Error('Profile updates are not available yet.')
   },
 }
-// Add these exports at the END of your existing src/api/auth.ts file
-
-// -----------------------------------------------------------------------------
-// Named exports used by pages like:
-// import { loginUser, registerUser, logoutUser } from '../api/auth'
-// -----------------------------------------------------------------------------
 
 export async function loginUser(email: string, password: string) {
   return authService.signIn(email, password)
@@ -82,9 +59,12 @@ export async function registerUser(
   email: string,
   password: string,
   fullName: string,
-  role: UserRole = 'customer'
+  role: UserRole = 'customer',
+  vendorDetails?: { location?: string; category?: string }
 ) {
-  return authService.signUp(email, password, fullName, role)
+  void role
+  void vendorDetails
+  return authService.signUp(email, password, fullName)
 }
 
 export async function logoutUser() {
@@ -95,13 +75,10 @@ export async function getCurrentSession() {
   return authService.getSession()
 }
 
-export async function getUserProfile(userId: string) {
-  return authService.getProfile(userId)
+export async function getUserProfile(): Promise<Profile | null> {
+  return authService.getProfile()
 }
 
-export async function updateUserProfile(
-  userId: string,
-  updates: Partial<Profile>
-) {
+export async function updateUserProfile(userId: string, updates: ProfileUpdate) {
   return authService.updateProfile(userId, updates)
 }
