@@ -8,8 +8,16 @@ export function useVendorSummary() {
   const [summary, setSummary] = useState<VendorSummary | null>(null)
   const [loading, setLoading] = useState(true)
   useEffect(() => {
-    if (!user?.vendor?.id) return
-    vendorService.getSummary(user.vendor.id).then(data => { setSummary(data); setLoading(false) })
+    if (!user?.vendor?.id) {
+      setSummary(null)
+      setLoading(false)
+      return
+    }
+    setLoading(true)
+    vendorService.getSummary(user.vendor.id)
+      .then(data => setSummary(data))
+      .catch(() => setSummary(null))
+      .finally(() => setLoading(false))
   }, [user?.vendor?.id])
   return { summary, loading }
 }

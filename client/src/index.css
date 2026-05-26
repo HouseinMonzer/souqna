@@ -8,5 +8,13 @@ body {
   font-family: 'Segoe UI', sans-serif;
   background-color: #f9f6f0;
   color: #1a1a1a;
+  overflow-x: hidden;
+}
+
+img,
+video,
+canvas,
+svg {
+  max-width: 100%;
 }
 @import "tailwindcss";
