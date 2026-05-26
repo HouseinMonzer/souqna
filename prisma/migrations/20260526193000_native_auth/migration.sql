@@ -1,0 +1,2 @@
+ALTER TABLE "User" ALTER COLUMN "clerkId" DROP NOT NULL;
+ALTER TABLE "User" ADD COLUMN "passwordHash" TEXT;
