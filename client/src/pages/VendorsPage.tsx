@@ -1,6 +1,8 @@
 import { useState, useEffect, useMemo, type SetStateAction } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { fetchVendors, type VendorType } from '../api/vendors'
+import { sampleVendors } from '../data/sampleData'
+import { Skeleton } from '../components/ui'
 
 const categories = ['All', 'Organic', 'Food', 'Electronics', 'Beauty', 'Home']
 
@@ -10,7 +12,7 @@ function VendorCard({ vendor }: { vendor: VendorType }) {
 
   return (
     <div
-      onClick={() => navigate(`/vendor/${vendor.id}`)}
+      onClick={() => navigate(`/vendors/${vendor.slug}`)}
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
       style={{
@@ -77,6 +79,7 @@ function VendorCard({ vendor }: { vendor: VendorType }) {
 }
 
 function VendorsPage() {
+  document.title = 'Vendors | SouqNa'
   const [activeCategory, setActiveCategory] = useState('All')
   const [search, setSearch] = useState('')
   const [vendors, setVendors] = useState<VendorType[]>([])
@@ -84,7 +87,10 @@ function VendorsPage() {
 
   useEffect(() => {
     fetchVendors().then((data: SetStateAction<VendorType[]>) => {
-      setVendors(data)
+      setVendors(data && data.length > 0 ? data : sampleVendors)
+      setLoading(false)
+    }).catch(() => {
+      setVendors(sampleVendors)
       setLoading(false)
     })
   }, [])
@@ -154,9 +160,16 @@ function VendorsPage() {
         </div>
 
         {loading ? (
-          <div style={{ textAlign: 'center', padding: '80px 0', color: '#7a8a6e' }}>
-            <div style={{ fontSize: '48px', marginBottom: '16px' }}>⏳</div>
-            <p>Loading vendors...</p>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: '20px' }}>
+            {Array.from({ length: 9 }).map((_, i) => (
+              <div key={i} style={{ backgroundColor: '#fff', borderRadius: '14px', border: '1.5px solid #e0dbd0', padding: '24px' }}>
+                <div style={{ display: 'flex', gap: '14px', alignItems: 'center', marginBottom: '16px' }}>
+                  <Skeleton width={52} height={52} borderRadius={26} />
+                  <div style={{ flex: 1 }}><Skeleton height={18} width="70%" style={{ marginBottom: '8px' }} /><Skeleton height={14} width="40%" /></div>
+                </div>
+                <Skeleton height={14} style={{ marginBottom: '6px' }} /><Skeleton height={14} width="80%" />
+              </div>
+            ))}
           </div>
         ) : filtered.length === 0 ? (
           <div style={{ textAlign: 'center', padding: '80px 0', color: '#7a8a6e' }}>

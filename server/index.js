@@ -1,14 +1,25 @@
 require('dotenv').config({ path: '.env.local' })
 require('dotenv').config()
 
+const crypto = require('crypto')
 const express = require('express')
 const cors = require('cors')
+const session = require('express-session')
+const passport = require('passport')
+const GoogleStrategy = require('passport-google-oauth20').Strategy
+const FacebookStrategy = require('passport-facebook').Strategy
 const rateLimit = require('express-rate-limit')
 const { PrismaClient } = require('@prisma/client')
 const { v2: cloudinary } = require('cloudinary')
 const { z } = require('zod')
 const bcrypt = require('bcrypt')
 const jwt = require('jsonwebtoken')
+const {
+  sendVerificationEmail,
+  sendOrderConfirmation,
+  sendVendorNewOrderAlert,
+  sendOrderStatusUpdate,
+} = require('./email')
 
 const app = express()
 const prisma = new PrismaClient()
@@ -35,6 +46,138 @@ cloudinary.config({
 app.use(cors({ origin: CLIENT_ORIGIN ? CLIENT_ORIGIN.split(',').map(origin => origin.trim()) : true, credentials: true }))
 app.use(express.json({ limit: '8mb' }))
 app.use(rateLimit({ windowMs: 60_000, limit: 240 }))
+
+// ─── Session (only used during OAuth dance — not for API auth) ────────────────
+app.use(session({
+  secret: process.env.SESSION_SECRET || 'souqna-session-fallback',
+  resave: false,
+  saveUninitialized: false,
+  cookie: { secure: false, maxAge: 10 * 60 * 1000 },
+}))
+app.use(passport.initialize())
+app.use(passport.session())
+passport.serializeUser((u, done) => done(null, u))
+passport.deserializeUser((u, done) => done(null, u))
+
+const API_BASE = process.env.API_URL || `http://localhost:${process.env.PORT || 4000}`
+const FRONTEND = CLIENT_ORIGIN || 'http://localhost:5173'
+
+// ─── Shared OAuth user resolver ───────────────────────────────────────────────
+async function resolveOAuthUser({ providerId, providerField, email, displayName, avatarUrl }) {
+  // 1. Find by provider ID
+  let rows = await prisma.$queryRawUnsafe(
+    `SELECT id FROM "User" WHERE "${providerField}" = $1 LIMIT 1`, providerId
+  )
+  let user = rows[0]
+    ? await prisma.user.findUnique({ where: { id: rows[0].id }, include: authUserInclude })
+    : null
+
+  // 2. Find by email → link provider
+  if (!user && email) {
+    user = await prisma.user.findUnique({ where: { email }, include: authUserInclude })
+    if (user) {
+      await prisma.$executeRawUnsafe(
+        `UPDATE "User" SET "${providerField}"=$1, "isVerified"=true WHERE id=$2`, providerId, user.id
+      )
+      user = await prisma.user.findUnique({ where: { id: user.id }, include: authUserInclude })
+    }
+  }
+
+  // 3. Brand new user
+  if (!user) {
+    user = await prisma.user.create({
+      data: {
+        email: email || `${providerField}_${providerId}@oauth.local`,
+        isVerified: true,
+        profile: { create: { fullName: displayName, role: 'customer', avatarUrl } },
+        customer: { create: {} },
+      },
+      include: authUserInclude,
+    })
+    await prisma.$executeRawUnsafe(
+      `UPDATE "User" SET "${providerField}"=$1 WHERE id=$2`, providerId, user.id
+    )
+  }
+
+  return user
+}
+
+// ─── Google Strategy ──────────────────────────────────────────────────────────
+if (process.env.GOOGLE_CLIENT_ID) {
+  passport.use(new GoogleStrategy({
+    clientID: process.env.GOOGLE_CLIENT_ID,
+    clientSecret: process.env.GOOGLE_CLIENT_SECRET,
+    callbackURL: `${API_BASE}/api/auth/google/callback`,
+  }, async (_at, _rt, profile, done) => {
+    try {
+      const email = profile.emails?.[0]?.value
+      const user = await resolveOAuthUser({
+        providerId: profile.id,
+        providerField: 'googleId',
+        email,
+        displayName: profile.displayName || (email ? email.split('@')[0] : 'User'),
+        avatarUrl: profile.photos?.[0]?.value || null,
+      })
+      done(null, user)
+    } catch (err) { done(err) }
+  }))
+}
+
+// ─── Facebook Strategy ────────────────────────────────────────────────────────
+if (process.env.FACEBOOK_APP_ID) {
+  passport.use(new FacebookStrategy({
+    clientID: process.env.FACEBOOK_APP_ID,
+    clientSecret: process.env.FACEBOOK_APP_SECRET,
+    callbackURL: `${API_BASE}/api/auth/facebook/callback`,
+    profileFields: ['id', 'displayName', 'emails', 'photos'],
+  }, async (_at, _rt, profile, done) => {
+    try {
+      const email = profile.emails?.[0]?.value || null
+      const user = await resolveOAuthUser({
+        providerId: profile.id,
+        providerField: 'facebookId',
+        email,
+        displayName: profile.displayName || 'Facebook User',
+        avatarUrl: profile.photos?.[0]?.value || null,
+      })
+      done(null, user)
+    } catch (err) { done(err) }
+  }))
+}
+
+// ─── Google Routes ────────────────────────────────────────────────────────────
+app.get('/api/auth/google', (req, res, next) => {
+  if (!process.env.GOOGLE_CLIENT_ID) {
+    return res.redirect(`${FRONTEND}/login?error=google_not_configured`)
+  }
+  passport.authenticate('google', { scope: ['profile', 'email'], session: true })(req, res, next)
+})
+
+app.get('/api/auth/google/callback', (req, res, next) => {
+  passport.authenticate('google', { session: true, failureRedirect: `${FRONTEND}/login?error=google` }, (err, user) => {
+    if (err || !user) return res.redirect(`${FRONTEND}/login?error=google`)
+    const token = signAuthToken(user)
+    req.logout(() => {})
+    res.redirect(`${FRONTEND}/auth/callback?token=${token}`)
+  })(req, res, next)
+})
+
+// ─── Facebook Routes ──────────────────────────────────────────────────────────
+app.get('/api/auth/facebook', (req, res, next) => {
+  if (!process.env.FACEBOOK_APP_ID) {
+    return res.redirect(`${FRONTEND}/login?error=facebook_not_configured`)
+  }
+  passport.authenticate('facebook', { scope: ['email'], session: true })(req, res, next)
+})
+
+app.get('/api/auth/facebook/callback', (req, res, next) => {
+  passport.authenticate('facebook', { session: true, failureRedirect: `${FRONTEND}/login?error=facebook` }, (err, user) => {
+    if (err || !user) return res.redirect(`${FRONTEND}/login?error=facebook`)
+    const token = signAuthToken(user)
+    req.logout(() => {})
+    res.redirect(`${FRONTEND}/auth/callback?token=${token}`)
+  })(req, res, next)
+})
 
 const wrap = fn => (req, res, next) => Promise.resolve(fn(req, res, next)).catch(next)
 
@@ -133,11 +276,15 @@ function mapAuthUser(user) {
   return {
     id: user.id,
     email: user.email,
+    isVerified: user.isVerified ?? true,
     profile: mapProfile(user.profile),
     vendor: mapVendor(user.vendor),
     customer: mapCustomer(user.customer),
   }
 }
+
+// resend cooldown — in-memory, 60s per email
+const resendCooldowns = new Map()
 
 function signAuthToken(user) {
   return jwt.sign({ userId: user.id, email: user.email }, JWT_SECRET, { expiresIn: JWT_EXPIRES_IN })
@@ -504,17 +651,27 @@ app.post('/api/auth/register', wrap(async (req, res) => {
   }
 
   const passwordHash = await bcrypt.hash(input.password, 12)
+  const verificationToken = crypto.randomBytes(32).toString('hex')
+  const verificationExpiry = new Date(Date.now() + 24 * 60 * 60 * 1000)
+
   try {
-    const user = await prisma.user.create({
+    await prisma.user.create({
       data: {
         email: input.email,
         passwordHash,
+        isVerified: false,
+        emailVerificationToken: verificationToken,
+        emailVerificationExpiry: verificationExpiry,
         profile: { create: { fullName: input.name, role: 'customer' } },
         customer: { create: {} },
       },
-      include: authUserInclude,
     })
-    res.status(201).json({ token: signAuthToken(user), user: mapAuthUser(user) })
+    sendVerificationEmail(input.email, input.name, verificationToken).catch(console.error)
+    res.status(201).json({
+      message: 'Account created! Please check your email to verify your account.',
+      email: input.email,
+      needsVerification: true,
+    })
   } catch (error) {
     if (error?.code === 'P2002') {
       return res.status(409).json({ message: 'An account with this email already exists. Please sign in instead.' })
@@ -537,6 +694,14 @@ app.post('/api/auth/login', wrap(async (req, res) => {
     return res.status(401).json({ message: 'The password you entered is incorrect.' })
   }
 
+  if (!user.isVerified) {
+    return res.status(403).json({
+      message: 'Please verify your email before signing in.',
+      needsVerification: true,
+      email: user.email,
+    })
+  }
+
   res.json({ token: signAuthToken(user), user: mapAuthUser(user) })
 }))
 
@@ -544,6 +709,59 @@ app.get('/api/auth/me', authRequired, wrap(async (req, res) => {
   const user = await getAuthedUser(req, res)
   if (!user) return
   res.json({ user: mapAuthUser(user) })
+}))
+
+app.get('/api/auth/verify-email', wrap(async (req, res) => {
+  const token = String(req.query.token || '')
+  if (!token) return res.status(400).json({ message: 'Invalid verification link.' })
+
+  const user = await prisma.user.findFirst({
+    where: {
+      emailVerificationToken: token,
+      emailVerificationExpiry: { gt: new Date() },
+    },
+    include: authUserInclude,
+  })
+
+  if (!user) {
+    return res.status(400).json({ message: 'Verification link is invalid or has expired.' })
+  }
+
+  const verified = await prisma.user.update({
+    where: { id: user.id },
+    data: { isVerified: true, emailVerificationToken: null, emailVerificationExpiry: null },
+    include: authUserInclude,
+  })
+
+  res.json({ message: 'Email verified! Welcome to SouQna.', token: signAuthToken(verified), user: mapAuthUser(verified) })
+}))
+
+app.post('/api/auth/resend-verification', wrap(async (req, res) => {
+  const input = parseBody(z.object({ email: z.string().email() }), req, res)
+  if (!input) return
+
+  const now = Date.now()
+  const lastSent = resendCooldowns.get(input.email)
+  if (lastSent && now - lastSent < 60_000) {
+    const wait = Math.ceil((60_000 - (now - lastSent)) / 1000)
+    return res.status(429).json({ message: `Please wait ${wait}s before requesting another email.`, wait })
+  }
+
+  const user = await prisma.user.findUnique({ where: { email: input.email }, include: { profile: true } })
+  // Always return 200 to not reveal whether an email exists
+  if (!user || user.isVerified) {
+    return res.json({ message: 'If this email has a pending verification, a new email has been sent.' })
+  }
+
+  const token = crypto.randomBytes(32).toString('hex')
+  await prisma.user.update({
+    where: { id: user.id },
+    data: { emailVerificationToken: token, emailVerificationExpiry: new Date(Date.now() + 24 * 60 * 60 * 1000) },
+  })
+  resendCooldowns.set(input.email, now)
+  sendVerificationEmail(input.email, user.profile?.fullName || '', token).catch(console.error)
+
+  res.json({ message: 'Verification email sent. Please check your inbox.' })
 }))
 
 const productInputSchema = z.object({
@@ -775,8 +993,52 @@ app.post('/api/orders', authRequired, async (req, res) => {
         })),
       },
     },
-    include: { orderItems: { include: { vendor: true } } },
+    include: { orderItems: { include: { vendor: { include: { user: true } } } } },
   })
+
+  // Fire emails — never block the response
+  ;(async () => {
+    try {
+      const buyerFirstName = (user.profile?.fullName || user.email).split(' ')[0]
+
+      // 1. Order confirmation to buyer
+      sendOrderConfirmation(user.email, {
+        orderNumber: order.orderNumber,
+        items: order.orderItems,
+        subtotal: order.subtotal,
+        shippingCost: order.shippingCost,
+        total: order.total,
+        shippingName: order.shippingName,
+        shippingAddress: order.shippingAddress,
+        shippingCity: order.shippingCity,
+      }).catch(console.error)
+
+      // 2. New order alert to each vendor (grouped by vendor)
+      const byVendor = {}
+      for (const item of order.orderItems) {
+        if (!byVendor[item.vendorId]) {
+          byVendor[item.vendorId] = { vendor: item.vendor, items: [] }
+        }
+        byVendor[item.vendorId].items.push(item)
+      }
+      for (const { vendor, items } of Object.values(byVendor)) {
+        if (!vendor?.user?.email) continue
+        const vendorTotal = items.reduce((s, i) => s + i.totalPrice, 0)
+        sendVendorNewOrderAlert(vendor.user.email, {
+          storeName: vendor.storeName,
+          orderNumber: order.orderNumber,
+          buyerFirstName,
+          items,
+          total: vendorTotal,
+          shippingAddress: order.shippingAddress,
+          shippingCity: order.shippingCity,
+        }).catch(console.error)
+      }
+    } catch (e) {
+      console.error('[order emails]', e)
+    }
+  })()
+
   res.status(201).json({ data: mapOrder(order) })
 })
 
@@ -807,6 +1069,51 @@ app.get('/api/orders/vendor/:vendorId', authRequired, async (req, res) => {
   })
   res.json({ data: orderItems.map(item => mapOrder({ ...item.order, orderItems: [item] }).order_items[0]) })
 })
+
+// Vendor: update a single order item status (approve / ship / deliver / cancel)
+app.patch('/api/vendor/orders/:itemId/status', authRequired, wrap(async (req, res) => {
+  const input = parseBody(z.object({
+    status: z.enum(['confirmed', 'processing', 'shipped', 'delivered', 'cancelled']),
+    trackingNumber: z.string().optional().nullable(),
+  }), req, res)
+  if (!input) return
+
+  const user = await getAuthedUser(req, res)
+  if (!user) return
+  if (!user.vendor) return res.status(403).json({ message: 'Not a vendor' })
+
+  const item = await prisma.orderItem.findFirst({
+    where: { id: req.params.itemId, vendorId: user.vendor.id },
+    include: {
+      order: { include: { customer: { include: { user: { include: { profile: true } } } } } },
+      vendor: true,
+    },
+  })
+  if (!item) return res.status(404).json({ message: 'Order item not found' })
+
+  const updated = await prisma.orderItem.update({
+    where: { id: item.id },
+    data: {
+      vendorStatus: input.status,
+      ...(input.trackingNumber !== undefined ? { trackingNumber: input.trackingNumber } : {}),
+    },
+    include: { order: true, vendor: true },
+  })
+
+  // Email buyer about the status change (fire and forget)
+  const buyerEmail = item.order.customer.user.email
+  if (buyerEmail) {
+    sendOrderStatusUpdate(buyerEmail, {
+      orderNumber: item.order.orderNumber,
+      storeName: item.vendor.storeName,
+      newStatus: input.status,
+      items: [item],
+      trackingNumber: input.trackingNumber || updated.trackingNumber,
+    }).catch(console.error)
+  }
+
+  res.json({ data: updated })
+}))
 
 app.get('/api/admin/analytics', authRequired, requireAdmin, async (_req, res) => {
   const now = new Date()

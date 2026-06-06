@@ -1,3 +1,5 @@
+import { useNavigate } from 'react-router-dom'
+
 const products = [
   { id: 1, name: 'Organic Olive Oil 500ml', vendor: 'Green Valley', price: 12.00, rating: 4.9, reviews: 142, emoji: '🫒', badge: 'Bestseller' },
   { id: 2, name: 'Wireless Headphones Pro', vendor: 'TechZone LB', price: 45.00, rating: 4.6, reviews: 89, emoji: '🎧', badge: 'New' },
@@ -26,6 +28,8 @@ function Stars({ rating }: { rating: number }) {
 }
 
 function ProductsSection() {
+  const navigate = useNavigate()
+
   return (
     <section style={{ padding: '0 24px 48px' }}>
       <div style={{ maxWidth: '1200px', margin: '0 auto' }}>
@@ -35,7 +39,14 @@ function ProductsSection() {
           <h2 style={{ fontSize: '22px', fontWeight: '700', color: '#1A2E0E', fontFamily: 'Georgia, serif' }}>
             Featured products
           </h2>
-          <span style={{ fontSize: '14px', color: '#5C8A2E', cursor: 'pointer' }}>View all →</span>
+          <span
+            onClick={() => navigate('/shop')}
+            style={{ fontSize: '14px', color: '#5C8A2E', cursor: 'pointer', fontWeight: '600' }}
+            onMouseEnter={e => e.currentTarget.style.textDecoration = 'underline'}
+            onMouseLeave={e => e.currentTarget.style.textDecoration = 'none'}
+          >
+            View all →
+          </span>
         </div>
 
         {/* Grid */}
@@ -47,6 +58,7 @@ function ProductsSection() {
           {products.map((p) => (
             <div
               key={p.id}
+              onClick={() => navigate('/shop')}
               style={{
                 backgroundColor: '#fff',
                 border: '1.5px solid #e0dbd0',
@@ -101,6 +113,7 @@ function ProductsSection() {
                     ${p.price.toFixed(2)}
                   </span>
                   <button
+                    onClick={e => { e.stopPropagation(); navigate('/shop') }}
                     style={{
                       backgroundColor: '#2D4A1E', color: '#fff',
                       border: 'none', borderRadius: '8px',

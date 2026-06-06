@@ -3,17 +3,16 @@ import StatsBar from '../components/home/StatsBar'
 import CategoriesSection from '../components/home/CategoriesSection'
 import ProductsSection from '../components/home/ProductsSection'
 import VendorsSection from '../components/home/VendorsSection'
-import Footer from '../components/home/Footer'
 
 function HomePage() {
+  document.title = 'SouqNa — Lebanese Multi-Vendor Marketplace'
   return (
-    <div style={{ backgroundColor: '#F7F2E8', minHeight: '100vh' }}>
+    <div style={{ backgroundColor: '#F7F2E8' }}>
       <HeroSection />
       <StatsBar />
       <CategoriesSection />
       <ProductsSection />
       <VendorsSection />
-      <Footer />
     </div>
   )
 }

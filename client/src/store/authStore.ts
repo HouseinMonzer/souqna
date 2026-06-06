@@ -1,53 +1,83 @@
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
-import { supabase } from '../lib/supabase'
-import { authService } from '../api/auth'
-import { vendorService } from '../api/vendors'
-import type { AuthUser, UserRole } from '../types/database.types'
+import { AUTH_TOKEN_KEY, apiFetch } from '../lib/api'
+import type { AuthUser } from '../types/database.types'
 
 interface AuthState {
-  user:     AuthUser | null
-  loading:  boolean
-  setUser:  (user: AuthUser | null) => void
-  setAuth:  (user: AuthUser | null) => void
-  signIn:   (email: string, password: string) => Promise<void>
-  signUp:   (email: string, password: string, fullName: string, role?: UserRole) => Promise<void>
-  signOut:  () => Promise<void>
+  user: AuthUser | null
+  loading: boolean
+  setUser: (user: AuthUser | null) => void
   loadUser: () => Promise<void>
+  logout: () => void
+  signOut: () => void
+  signIn: (email: string, password: string) => Promise<AuthUser>
+  signUp: (email: string, password: string, name: string) => Promise<AuthUser>
 }
 
 export const useAuthStore = create<AuthState>()(
   persist(
-    (set, get) => ({
-      user: null, loading: true,
+    (set) => ({
+      user: null,
+      loading: false,
       setUser: (user) => set({ user }),
-      setAuth: (user) => set({ user }),
+      loadUser: async () => {
+        if (!localStorage.getItem(AUTH_TOKEN_KEY)) {
+          set({ user: null, loading: false })
+          return
+        }
+        set({ loading: true })
+        for (let attempt = 0; attempt < 4; attempt++) {
+          try {
+            const response = await apiFetch<{ user: AuthUser }>('/api/auth/me')
+            set({ user: response.user ?? null, loading: false })
+            return
+          } catch {
+            if (attempt < 3) await new Promise(r => setTimeout(r, 400 * (attempt + 1)))
+          }
+        }
+        localStorage.removeItem(AUTH_TOKEN_KEY)
+        set({ user: null, loading: false })
+      },
+      logout: () => {
+        localStorage.removeItem(AUTH_TOKEN_KEY)
+        set({ user: null, loading: false })
+      },
+      signOut: () => {
+        localStorage.removeItem(AUTH_TOKEN_KEY)
+        set({ user: null, loading: false })
+      },
       signIn: async (email, password) => {
         set({ loading: true })
-        try { await authService.signIn(email, password); await get().loadUser() }
-        finally { set({ loading: false }) }
+        try {
+          const response = await apiFetch<{ token: string; user: AuthUser }>('/api/auth/login', {
+            method: 'POST',
+            body: JSON.stringify({ email, password }),
+          })
+          localStorage.setItem(AUTH_TOKEN_KEY, response.token)
+          set({ user: response.user, loading: false })
+          return response.user
+        } catch (error) {
+          set({ loading: false })
+          throw error
+        }
       },
-      signUp: async (email, password, fullName, role = 'customer') => {
-        set({ loading: true })
-        try { await authService.signUp(email, password, fullName, role); await get().loadUser() }
-        finally { set({ loading: false }) }
-      },
-      signOut: async () => { await authService.signOut(); set({ user: null }) },
-      loadUser: async () => {
+      signUp: async (email, password, name) => {
         set({ loading: true })
         try {
-          const session = await authService.getSession()
-          if (!session) { set({ user: null }); return }
-          const profile = await authService.getProfile(session.user.id)
-          if (!profile) { set({ user: null }); return }
-          const vendor = profile.role === 'vendor' ? await vendorService.getByUserId(session.user.id) : null
-          const { data: customer } = profile.role === 'customer'
-            ? await supabase.from('customers').select('*').eq('user_id', session.user.id).single()
-            : { data: null }
-          set({ user: { id: session.user.id, email: session.user.email!, profile, vendor, customer } })
-        } finally { set({ loading: false }) }
+          // Register now returns { message, email, needsVerification } — no token yet
+          await apiFetch<{ message: string; email: string; needsVerification: boolean }>('/api/auth/register', {
+            method: 'POST',
+            body: JSON.stringify({ email, password, name }),
+          })
+          set({ loading: false })
+          // Return a sentinel so the caller knows to redirect to verify-pending
+          return { needsVerification: true, email } as unknown as AuthUser
+        } catch (error) {
+          set({ loading: false })
+          throw error
+        }
       },
     }),
-    { name: 'souqna-auth', partialize: (s) => ({ user: s.user }) }
+    { name: 'souqna-auth', partialize: (state) => ({ user: state.user }) }
   )
 )

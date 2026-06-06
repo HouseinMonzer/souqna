@@ -442,7 +442,7 @@ function DashboardPage() {
             { key: 'profile', label: '⚙️ Store Settings' },
           ].map(tab => (
             <button key={tab.key}
-              onClick={() => { setActiveTab(tab.key as typeof activeTab); if (tab.key !== 'add') { setEditingProduct(null); setForm(emptyProductForm) } }}
+              onClick={() => { setActiveTab(tab.key as typeof activeTab); setAddError(''); if (tab.key !== 'add') { setEditingProduct(null); setForm(emptyProductForm) } }}
               style={{
                 padding: '9px 18px', borderRadius: '8px', fontSize: '14px', fontWeight: '500', cursor: 'pointer',
                 border: activeTab === tab.key ? 'none' : '1.5px solid #e0dbd0',
@@ -538,6 +538,7 @@ function DashboardPage() {
                 <option value="">Select category</option>
                 {productCategories.map(c => <option key={c} value={c}>{c}</option>)}
               </select>
+              {addError && <p style={{ color: '#c62828', fontSize: '13px', backgroundColor: '#fce4ec', padding: '10px 14px', borderRadius: '8px', margin: 0 }}>{addError}</p>}
               <div style={{ display: 'flex', gap: '10px' }}>
                 <button onClick={handleSubmit} disabled={saving} style={{ flex: 1, backgroundColor: saving ? '#7a8a6e' : '#2D4A1E', color: '#fff', border: 'none', borderRadius: '8px', padding: '13px', fontSize: '15px', fontWeight: '600', cursor: saving ? 'not-allowed' : 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}>
                   {saving ? <><Spinner size={18} color="#fff" /> Saving...</> : editingProduct ? 'Update Product' : 'Add Product'}

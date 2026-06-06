@@ -1,6 +1,6 @@
 import React from 'react'
 import { useEffect } from 'react'
-import { BrowserRouter, Routes, Route, Outlet } from 'react-router-dom'
+import { BrowserRouter, Routes, Route, Outlet, Navigate } from 'react-router-dom'
 import Navbar from './components/Navbar'
 import Footer from './components/home/Footer'
 import HomePage from './pages/HomePage'
@@ -15,6 +15,9 @@ import DashboardPage from './pages/DashboardPage'
 import AdminDashboard from './pages/AdminDashboard'
 import SubscriptionPage from './pages/SubscriptionPage'
 import CheckoutPage from './pages/CheckoutPage'
+import VerifyPendingPage from './pages/VerifyPendingPage'
+import VerifyEmailPage from './pages/VerifyEmailPage'
+import AuthCallbackPage from './pages/AuthCallbackPage'
 import AboutPage from './pages/AboutPage'
 import ContactPage from './pages/ContactPage'
 import PrivacyPage from './pages/PrivacyPage'
@@ -55,9 +58,13 @@ function App() {
   return (
     <BrowserRouter>
       <Routes>
-        <Route path="/sign-in" element={<AuthLayout><LoginPage /></AuthLayout>} />
+        {/* RequireAuth redirects unauthenticated users here; /login hosts the real Clerk <SignIn/>. */}
+        <Route path="/sign-in" element={<Navigate to="/login" replace />} />
         <Route path="/login/*" element={<AuthLayout><LoginPage /></AuthLayout>} />
         <Route path="/register/*" element={<AuthLayout><RegisterPage /></AuthLayout>} />
+        <Route path="/verify-pending" element={<AuthLayout><VerifyPendingPage /></AuthLayout>} />
+        <Route path="/verify-email" element={<AuthLayout><VerifyEmailPage /></AuthLayout>} />
+        <Route path="/auth/callback" element={<AuthCallbackPage />} />
         <Route path="/admin" element={<RequireAuth requireRole="admin"><AdminDashboard /></RequireAuth>} />
         <Route element={<MainLayout />}>
           <Route path="/" element={<HomePage />} />

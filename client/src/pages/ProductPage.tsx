@@ -1,6 +1,10 @@
 import { useParams, useNavigate } from 'react-router-dom'
 import { useState, useEffect } from 'react'
-import { supabase } from '../lib/supabase'
+import { productService } from '../api/products'
+import { useCartStore } from '../store/cartStore'
+import { Skeleton } from '../components/ui'
+import { useIsMobile } from '../hooks/useMediaQuery'
+import type { Product, ProductImage, ProductVariant } from '../types/database.types'
 
 function Stars({ rating }: { rating: number }) {
   return (
@@ -15,47 +19,52 @@ function Stars({ rating }: { rating: number }) {
 function ProductPage() {
   const { slug } = useParams()
   const navigate = useNavigate()
+  const { addItem } = useCartStore()
   const [added, setAdded] = useState(false)
-  const [product, setProduct] = useState<any>(null)
-  const [related, setRelated] = useState<any[]>([])
+  const [product, setProduct] = useState<Product | null>(null)
+  const [related, setRelated] = useState<Product[]>([])
   const [loading, setLoading] = useState(true)
   const [selectedImage, setSelectedImage] = useState<string | null>(null)
+  const [selectedVariant, setSelectedVariant] = useState<ProductVariant | null>(null)
+  const [qty, setQty] = useState(1)
+  const isMobile = useIsMobile()
 
   useEffect(() => {
     if (!slug) return
     setLoading(true)
-
-    supabase
-      .from('products')
-      .select('*, product_images(*), product_variants(*), vendors(id, store_name, slug, logo_url, rating, verified, location), categories(id, name, slug)')
-      .eq('slug', slug)
-      .single()
-      .then(({ data }: any) => {
+    productService.getBySlug(slug)
+      .then((data) => {
         setProduct(data)
-        const primary = (data as any)?.product_images?.find((img: any) => img.is_primary)?.image_url
-          || (data as any)?.product_images?.[0]?.image_url
+        const primary = data?.product_images?.find((img: ProductImage) => img.is_primary)?.image_url
+          || data?.product_images?.[0]?.image_url
         setSelectedImage(primary ?? null)
-
-        // Fetch related
         if (data?.category_id) {
-          supabase
-            .from('products')
-            .select('*, product_images(image_url, is_primary)')
-            .eq('category_id', data.category_id)
-            .eq('status', 'active')
-            .neq('id', data.id)
-            .limit(3)
-            .then(({ data: rel }: any) => setRelated(rel ?? []))
+          productService.getRelated(data.category_id, data.id, 3)
+            .then((rel) => setRelated(rel ?? []))
         }
         setLoading(false)
       })
+      .catch(() => setLoading(false))
   }, [slug])
+
+  useEffect(() => {
+    if (product) document.title = `${product.name} | SouqNa`
+  }, [product])
 
   if (loading) {
     return (
-      <div style={{ textAlign: 'center', padding: '80px 24px', backgroundColor: '#F7F2E8', minHeight: '100vh' }}>
-        <div style={{ fontSize: '48px', marginBottom: '16px' }}>⏳</div>
-        <p style={{ color: '#7a8a6e', fontSize: '16px' }}>Loading...</p>
+      <div style={{ backgroundColor: '#F7F2E8', minHeight: '100vh', maxWidth: '1100px', margin: '0 auto', padding: '40px 24px' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr', gap: '40px' }}>
+          <Skeleton height={440} borderRadius={16} />
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', paddingTop: '8px' }}>
+            <Skeleton height={14} width="40%" />
+            <Skeleton height={32} width="85%" />
+            <Skeleton height={14} width="30%" />
+            <Skeleton height={20} width="25%" />
+            <Skeleton height={100} />
+            <Skeleton height={52} borderRadius={10} />
+          </div>
+        </div>
       </div>
     )
   }
@@ -73,6 +82,28 @@ function ProductPage() {
   }
 
   const images = product.product_images ?? []
+  const displayPrice = product.price + (selectedVariant?.price_adjustment || 0)
+
+  const handleAddToCart = () => {
+    const vendor = (product as any).vendor || product.vendors
+    if (!vendor) return
+    addItem({
+      id: product.id,
+      name: product.name,
+      slug: product.slug,
+      price: displayPrice,
+      compare_price: product.compare_price,
+      rating: product.rating,
+      total_reviews: product.total_reviews,
+      total_sold: product.total_sold,
+      featured: product.featured,
+      primary_image: selectedImage || (product as any).primary_image,
+      vendor: { id: vendor.id, store_name: vendor.store_name, slug: vendor.slug },
+      category: (product as any).category || product.categories || null,
+    }, qty, selectedVariant)
+    setAdded(true)
+    setTimeout(() => setAdded(false), 2000)
+  }
 
   return (
     <div style={{ backgroundColor: '#F7F2E8', minHeight: '100vh' }}>
@@ -93,7 +124,7 @@ function ProductPage() {
       <div style={{ maxWidth: '1200px', margin: '0 auto', padding: '40px 24px' }}>
 
         {/* Main grid */}
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '48px', marginBottom: '64px' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr', gap: isMobile ? '24px' : '48px', marginBottom: '64px' }}>
 
           {/* Images */}
           <div>
@@ -109,7 +140,7 @@ function ProductPage() {
             </div>
             {images.length > 1 && (
               <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
-                {images.map((img: any) => (
+                {images.map((img: ProductImage) => (
                   <div
                     key={img.id}
                     onClick={() => setSelectedImage(img.image_url)}
@@ -142,7 +173,7 @@ function ProductPage() {
             </div>
 
             <div style={{ fontSize: '36px', fontWeight: '700', color: '#2D4A1E', fontFamily: 'Georgia, serif' }}>
-              ${Number(product.price).toFixed(2)}
+              ${displayPrice.toFixed(2)}
               {product.compare_price && (
                 <span style={{ fontSize: '20px', color: '#7a8a6e', textDecoration: 'line-through', marginLeft: '12px' }}>
                   ${Number(product.compare_price).toFixed(2)}
@@ -170,9 +201,51 @@ function ProductPage() {
               {product.stock > 0 ? `✓ In stock (${product.stock} available)` : '✗ Out of stock'}
             </div>
 
+            {/* Quantity selector */}
+            {product.stock > 0 && (
+              <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                <span style={{ fontSize: '14px', fontWeight: '600', color: '#1A2E0E' }}>Quantity:</span>
+                <div style={{ display: 'flex', alignItems: 'center', border: '1.5px solid #e0dbd0', borderRadius: '8px', overflow: 'hidden' }}>
+                  <button
+                    onClick={() => setQty(q => Math.max(1, q - 1))}
+                    style={{ width: '36px', height: '36px', border: 'none', backgroundColor: '#f8faf5', cursor: 'pointer', fontSize: '18px', color: '#2D4A1E', fontWeight: '700' }}
+                  >−</button>
+                  <span style={{ width: '40px', textAlign: 'center', fontSize: '15px', fontWeight: '600', color: '#1A2E0E' }}>{qty}</span>
+                  <button
+                    onClick={() => setQty(q => Math.min(product.stock, q + 1))}
+                    style={{ width: '36px', height: '36px', border: 'none', backgroundColor: '#f8faf5', cursor: 'pointer', fontSize: '18px', color: '#2D4A1E', fontWeight: '700' }}
+                  >+</button>
+                </div>
+              </div>
+            )}
+
+            {/* Variants */}
+            {product.product_variants && product.product_variants.length > 0 && (
+              <div>
+                <p style={{ fontSize: '14px', fontWeight: '600', color: '#1A2E0E', marginBottom: '8px' }}>Options:</p>
+                <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+                  {product.product_variants.map((v: ProductVariant) => (
+                    <button
+                      key={v.id}
+                      onClick={() => setSelectedVariant(selectedVariant?.id === v.id ? null : v)}
+                      style={{
+                        padding: '6px 14px', borderRadius: '8px', fontSize: '13px', fontWeight: '600', cursor: 'pointer',
+                        border: `2px solid ${selectedVariant?.id === v.id ? '#2D4A1E' : '#e0dbd0'}`,
+                        backgroundColor: selectedVariant?.id === v.id ? '#EBF2DE' : '#fff',
+                        color: '#1A2E0E',
+                      }}
+                    >
+                      {v.option_name}: {v.option_value}
+                      {v.price_adjustment !== 0 && ` (+$${v.price_adjustment.toFixed(2)})`}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+
             <div style={{ display: 'flex', gap: '12px', marginTop: '8px' }}>
               <button
-                onClick={() => { setAdded(true); setTimeout(() => setAdded(false), 1500) }}
+                onClick={handleAddToCart}
                 disabled={product.stock === 0}
                 style={{
                   flex: 1, backgroundColor: added ? '#5C8A2E' : '#2D4A1E',
@@ -181,23 +254,27 @@ function ProductPage() {
                   cursor: product.stock === 0 ? 'not-allowed' : 'pointer',
                   opacity: product.stock === 0 ? 0.6 : 1,
                   boxShadow: '0 4px 14px rgba(45,74,30,0.3)',
+                  transition: 'background-color 0.2s',
                 }}
               >
                 {added ? '✓ Added to Cart!' : '🛒 Add to Cart'}
               </button>
-              <button style={{
-                backgroundColor: '#fff', color: '#2D4A1E',
-                border: '1.5px solid #e0dbd0', borderRadius: '10px',
-                padding: '15px 20px', fontSize: '20px', cursor: 'pointer',
-              }}>
-                ♡
+              <button
+                onClick={() => navigate('/cart')}
+                style={{
+                  backgroundColor: '#fff', color: '#2D4A1E',
+                  border: '1.5px solid #e0dbd0', borderRadius: '10px',
+                  padding: '15px 20px', fontSize: '14px', cursor: 'pointer', fontWeight: '600',
+                }}
+              >
+                View Cart
               </button>
             </div>
 
             {/* Vendor info */}
             {product.vendors && (
               <div
-                onClick={() => navigate(`/store/${product.vendors.slug}`)}
+                onClick={() => product.vendors && navigate(`/vendors/${product.vendors.slug}`)}
                 style={{
                   marginTop: '8px', padding: '16px', borderRadius: '10px',
                   border: '1.5px solid #e0dbd0', backgroundColor: '#fff',
@@ -221,8 +298,8 @@ function ProductPage() {
               </div>
             )}
 
-            <button onClick={() => navigate('/shop')} style={{ backgroundColor: 'transparent', color: '#7a8a6e', border: 'none', fontSize: '14px', cursor: 'pointer', textAlign: 'left', padding: '0' }}>
-              ← Back to Shop
+            <button onClick={() => navigate(-1)} style={{ backgroundColor: 'transparent', color: '#7a8a6e', border: 'none', fontSize: '14px', cursor: 'pointer', textAlign: 'left', padding: '0' }}>
+              ← Back
             </button>
           </div>
         </div>
@@ -242,8 +319,8 @@ function ProductPage() {
               Related Products
             </h2>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(240px, 1fr))', gap: '18px' }}>
-              {related.map((p: any) => {
-                const img = p.product_images?.find((i: any) => i.is_primary)?.image_url || p.product_images?.[0]?.image_url
+              {related.map((p) => {
+                const img = p.product_images?.find(i => i.is_primary)?.image_url || p.product_images?.[0]?.image_url
                 return (
                   <div
                     key={p.id}
@@ -253,7 +330,7 @@ function ProductPage() {
                     onMouseLeave={e => { e.currentTarget.style.transform = 'translateY(0)'; e.currentTarget.style.boxShadow = 'none' }}
                   >
                     <div style={{ height: '120px', backgroundColor: '#EBF2DE', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '48px' }}>
-                      {img ? <img src={img} alt={p.name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : '🛍️'}
+                      {img ? <img src={img} alt={p.name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} loading="lazy" /> : '🛍️'}
                     </div>
                     <div style={{ padding: '14px' }}>
                       <h3 style={{ fontSize: '14px', fontWeight: '600', color: '#1A2E0E', marginBottom: '8px', fontFamily: 'Georgia, serif' }}>{p.name}</h3>

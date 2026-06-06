@@ -1,11 +1,15 @@
+import { useNavigate } from 'react-router-dom'
+
 const vendors = [
-  { name: 'Green Valley', category: 'Organic', rating: 4.9, sales: '1.2k', initials: 'GV', color: '#4a7c59' },
-  { name: 'Bekaa Farms', category: 'Food', rating: 5.0, sales: '980', initials: 'BF', color: '#b5620e' },
-  { name: 'TechZone LB', category: 'Tech', rating: 4.6, sales: '740', initials: 'TZ', color: '#2d6a9f' },
-  { name: 'Artisan LB', category: 'Beauty', rating: 4.8, sales: '560', initials: 'AL', color: '#9b59b6' },
+  { name: 'Green Valley', category: 'Organic', rating: 4.9, sales: '1.2k', initials: 'GV', color: '#4a7c59', slug: 'green-valley' },
+  { name: 'Bekaa Farms', category: 'Food', rating: 5.0, sales: '980', initials: 'BF', color: '#b5620e', slug: 'bekaa-farms' },
+  { name: 'TechZone LB', category: 'Tech', rating: 4.6, sales: '740', initials: 'TZ', color: '#2d6a9f', slug: 'techzone-lb' },
+  { name: 'Artisan LB', category: 'Beauty', rating: 4.8, sales: '560', initials: 'AL', color: '#9b59b6', slug: 'artisan-lb' },
 ]
 
 function VendorsSection() {
+  const navigate = useNavigate()
+
   return (
     <section style={{ padding: '0 24px 48px' }}>
       <div style={{ maxWidth: '1200px', margin: '0 auto' }}>
@@ -14,7 +18,14 @@ function VendorsSection() {
           <h2 style={{ fontSize: '22px', fontWeight: '700', color: '#1A2E0E', fontFamily: 'Georgia, serif' }}>
             Top vendors this week
           </h2>
-          <span style={{ fontSize: '14px', color: '#5C8A2E', cursor: 'pointer' }}>View all →</span>
+          <span
+            onClick={() => navigate('/vendors')}
+            style={{ fontSize: '14px', color: '#5C8A2E', cursor: 'pointer', fontWeight: '600' }}
+            onMouseEnter={e => e.currentTarget.style.textDecoration = 'underline'}
+            onMouseLeave={e => e.currentTarget.style.textDecoration = 'none'}
+          >
+            View all →
+          </span>
         </div>
 
         <div style={{
@@ -25,6 +36,7 @@ function VendorsSection() {
           {vendors.map((v) => (
             <div
               key={v.name}
+              onClick={() => navigate(`/vendors/${v.slug}`)}
               style={{
                 backgroundColor: '#fff',
                 border: '1.5px solid #e0dbd0',
@@ -39,10 +51,12 @@ function VendorsSection() {
               onMouseEnter={e => {
                 e.currentTarget.style.borderColor = v.color
                 e.currentTarget.style.transform = 'translateY(-2px)'
+                e.currentTarget.style.boxShadow = '0 6px 20px rgba(0,0,0,0.08)'
               }}
               onMouseLeave={e => {
                 e.currentTarget.style.borderColor = '#e0dbd0'
                 e.currentTarget.style.transform = 'translateY(0)'
+                e.currentTarget.style.boxShadow = 'none'
               }}
             >
               <div style={{
