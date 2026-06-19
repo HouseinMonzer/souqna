@@ -646,10 +646,9 @@ app.get('/api/categories', async (_req, res) => {
   res.json({ data: categories.map(mapCategory) })
 })
 
-app.get('/api/vendors', async (req, res) => {
-  const status = String(req.query.status || 'active')
+app.get('/api/vendors', async (_req, res) => {
   const vendors = await prisma.vendor.findMany({
-    where: status ? { status } : undefined,
+    where: { status: 'active' },
     include: { vendorSummary: true, user: { include: { profile: true } } },
     orderBy: { joinedAt: 'desc' },
   })
@@ -661,7 +660,7 @@ app.get('/api/vendors/slug/:slug', async (req, res) => {
     where: { slug: req.params.slug },
     include: { vendorSummary: true, socialLinks: true, user: { include: { profile: true } } },
   })
-  if (!vendor) return res.status(404).json({ data: null })
+  if (!vendor || vendor.status !== 'active') return res.status(404).json({ data: null })
   res.json({ data: mapVendor(vendor) })
 })
 
@@ -670,6 +669,7 @@ app.get('/api/vendors/user/:userId', async (req, res) => {
     where: { userId: req.params.userId },
     include: { vendorSummary: true, user: { include: { profile: true } } },
   })
+  if (!vendor || vendor.status !== 'active') return res.json({ data: null })
   res.json({ data: mapVendor(vendor) })
 })
 
@@ -678,6 +678,7 @@ app.get('/api/vendors/:id', async (req, res) => {
     where: { id: req.params.id },
     include: { vendorSummary: true, user: { include: { profile: true } } },
   })
+  if (!vendor || vendor.status !== 'active') return res.json({ data: null })
   res.json({ data: mapVendor(vendor) })
 })
 
@@ -984,13 +985,10 @@ app.get('/api/vendor/me', authRequired, async (req, res) => {
   })
 })
 
-app.post('/api/vendor/products', authRequired, async (req, res) => {
+app.post('/api/vendor/products', authRequired, requireVendor, async (req, res) => {
   const input = parseBody(productInputSchema, req, res)
   if (!input) return
-  const user = await getAuthedUser(req, res)
-  if (!user) return
-  if (!user.vendor) return res.status(403).json({ message: 'Not a vendor' })
-  const vendor = user.vendor
+  const vendor = req.currentUser.vendor
   const category = input.categoryId
     ? await prisma.category.findUnique({ where: { id: input.categoryId } })
     : input.category
@@ -1011,8 +1009,8 @@ app.post('/api/vendor/products', authRequired, async (req, res) => {
       shortDescription: input.description ? sanitizeText(input.description) : null,
       price: input.price,
       stock: input.stock ?? 0,
-      status: input.status || 'draft',
-      approvalStatus: 'pending',
+      status: input.status || 'active',
+      approvalStatus: 'approved',
       featured: false,
       productImages: input.imageUrl ? { create: { imageUrl: input.imageUrl, isPrimary: true } } : undefined,
     },
@@ -1021,13 +1019,10 @@ app.post('/api/vendor/products', authRequired, async (req, res) => {
   res.status(201).json({ data: mapProduct(product) })
 })
 
-app.put('/api/vendor/products/:id', authRequired, async (req, res) => {
+app.put('/api/vendor/products/:id', authRequired, requireVendor, async (req, res) => {
   const input = parseBody(productInputSchema.partial(), req, res)
   if (!input) return
-  const user = await getAuthedUser(req, res)
-  if (!user) return
-  if (!user.vendor) return res.status(403).json({ message: 'Not a vendor' })
-  const vendor = user.vendor
+  const vendor = req.currentUser.vendor
   const existing = await prisma.product.findFirst({ where: { id: req.params.id, vendorId: vendor.id } })
   if (!existing) return res.status(404).json({ message: 'Product not found' })
 
@@ -1056,14 +1051,28 @@ app.put('/api/vendor/products/:id', authRequired, async (req, res) => {
   res.json({ data: mapProduct(product) })
 })
 
-app.delete('/api/vendor/products/:id', authRequired, async (req, res) => {
-  const user = await getAuthedUser(req, res)
-  if (!user) return
-  if (!user.vendor) return res.status(403).json({ message: 'Not a vendor' })
-  const vendor = user.vendor
-  const product = await prisma.product.findFirst({ where: { id: req.params.id, vendorId: vendor.id } })
+app.delete('/api/vendor/products/:id', authRequired, requireVendor, async (req, res) => {
+  const vendor = req.currentUser.vendor
+  const product = await prisma.product.findFirst({
+    where: { id: req.params.id, vendorId: vendor.id },
+    include: { productImages: true },
+  })
   if (!product) return res.status(404).json({ message: 'Product not found' })
-  await prisma.product.update({ where: { id: product.id }, data: { status: 'deleted' } })
+
+  const keys = product.productImages.map(img => img.publicId).filter(Boolean)
+  if (keys.length && utapi) {
+    try {
+      await utapi.deleteFiles(keys)
+    } catch (err) {
+      console.error('[product delete] UploadThing cleanup failed:', err.message)
+    }
+  }
+
+  await prisma.$transaction([
+    prisma.productImage.deleteMany({ where: { productId: product.id } }),
+    prisma.product.update({ where: { id: product.id }, data: { status: 'deleted' } }),
+  ])
+
   res.json({ data: true })
 })
 

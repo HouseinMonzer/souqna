@@ -11,3 +11,6 @@ client/dist
 server-debug.log
 server.log
 server-output.txt
+
+# Claude Code local settings
+.claude/settings.local.json
