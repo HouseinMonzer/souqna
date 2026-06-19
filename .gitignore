@@ -6,3 +6,8 @@ client/.env.local
 
 /generated/prisma
 client/dist
+
+# Local debug logs
+server-debug.log
+server.log
+server-output.txt

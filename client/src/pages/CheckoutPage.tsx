@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { useParams, useNavigate, Link } from 'react-router-dom'
+import { useTranslation } from 'react-i18next'
 import { useCartStore } from '../store/cartStore'
 import { apiFetch } from '../lib/api'
 import { Spinner } from '../components/ui'
@@ -14,18 +15,17 @@ const labelStyle: React.CSSProperties = {
   display: 'block', fontSize: '13px', fontWeight: '600', color: '#1A2E0E', marginBottom: '6px',
 }
 
-const PAYMENT_OPTIONS = [
-  { id: 'wish_money', label: 'Wish Money', icon: '💸', info: 'Pay via Wish Money to: +961 76 123 456' },
-  { id: 'omt', label: 'OMT Transfer', icon: '🏦', info: 'OMT Account: #12345678 — Souqna Lebanon' },
-  { id: 'cash_delivery', label: 'Cash on Delivery', icon: '💵', info: 'Pay cash when your order arrives' },
-  { id: 'credit_card', label: 'Credit Card', icon: '💳', info: 'Visa / Mastercard — secure checkout' },
-]
-
 function CheckoutPage() {
   const { vendorId } = useParams<{ vendorId: string }>()
   const navigate = useNavigate()
+  const { t, i18n } = useTranslation()
+  const isRTL = i18n.language?.startsWith('ar')
   const { getVendorCart, clearVendorCart } = useCartStore()
   const cart = vendorId ? getVendorCart(vendorId) : undefined
+
+  const PAYMENT_OPTIONS = [
+    { id: 'cash_delivery', label: t('checkout.cashOnDelivery'), icon: '💵', info: '' },
+  ]
 
   const [form, setForm] = useState({
     name: '', address: '', city: '', phone: '', note: '',
@@ -38,14 +38,14 @@ function CheckoutPage() {
 
   if (!cart || cart.items.length === 0) {
     return (
-      <div style={{ backgroundColor: '#F7F2E8', minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '24px' }}>
+      <div style={{ backgroundColor: '#F7F2E8', minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '24px' }} dir={isRTL ? 'rtl' : 'ltr'}>
         <div style={{ textAlign: 'center' }}>
           <div style={{ fontSize: '56px', marginBottom: '16px' }}>🛒</div>
           <h2 style={{ fontFamily: 'Georgia, serif', fontSize: '24px', color: '#1A2E0E', marginBottom: '12px' }}>
-            No items to checkout
+            {t('cart.empty')}
           </h2>
           <Link to="/cart" style={{ color: '#5C8A2E', fontWeight: '600', fontSize: '15px' }}>
-            ← Back to Cart
+            {isRTL ? '→' : '←'} {t('cart.title')}
           </Link>
         </div>
       </div>
@@ -58,31 +58,28 @@ function CheckoutPage() {
 
   if (orderNumber) {
     return (
-      <div style={{ backgroundColor: '#F7F2E8', minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '24px' }}>
+      <div style={{ backgroundColor: '#F7F2E8', minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '24px' }} dir={isRTL ? 'rtl' : 'ltr'}>
         <div style={{ maxWidth: '480px', width: '100%', textAlign: 'center', backgroundColor: '#fff', borderRadius: '20px', padding: '48px 32px', border: '1.5px solid #e0dbd0' }}>
           <div style={{ fontSize: '64px', marginBottom: '16px' }}>✅</div>
           <h2 style={{ fontFamily: 'Georgia, serif', fontSize: '26px', color: '#1A2E0E', marginBottom: '12px' }}>
-            Order Placed!
+            {t('checkout.orderConfirmed')}
           </h2>
-          <p style={{ fontSize: '15px', color: '#4a5a3e', lineHeight: 1.7, marginBottom: '20px' }}>
-            Your order from <strong>{cart.vendorName}</strong> has been placed successfully.
-          </p>
           <div style={{ backgroundColor: '#EBF2DE', borderRadius: '12px', padding: '16px', marginBottom: '24px' }}>
             <p style={{ fontSize: '14px', color: '#5C8A2E', fontWeight: '700', margin: 0 }}>
-              Order #{orderNumber}
+              {t('checkout.orderNumber')}{orderNumber}
             </p>
           </div>
           <button onClick={() => navigate('/shop')} style={{
             width: '100%', backgroundColor: '#2D4A1E', color: '#fff', border: 'none',
             borderRadius: '10px', padding: '14px', fontSize: '15px', fontWeight: '600', cursor: 'pointer', marginBottom: '12px',
           }}>
-            Continue Shopping
+            {t('cart.startShopping')}
           </button>
           <button onClick={() => navigate('/dashboard')} style={{
             width: '100%', backgroundColor: 'transparent', color: '#7a8a6e', border: '1.5px solid #e0dbd0',
             borderRadius: '10px', padding: '12px', fontSize: '14px', cursor: 'pointer',
           }}>
-            View My Orders
+            {t('nav.dashboard')}
           </button>
         </div>
       </div>
@@ -91,7 +88,7 @@ function CheckoutPage() {
 
   const handleSubmit = async () => {
     if (!form.name || !form.address || !form.city || !form.phone) {
-      setError('Please fill in all required fields')
+      setError(t('common.loading'))
       return
     }
     setSubmitting(true)
@@ -104,13 +101,6 @@ function CheckoutPage() {
             product_id: i.product_id,
             variant_id: i.variant_id,
             quantity: i.quantity,
-            product: {
-              id: i.product.id,
-              price: i.product.price,
-              name: i.product.name,
-              primary_image: i.product.primary_image,
-              vendor: { id: i.product.vendor.id },
-            },
           })),
           shippingInfo: {
             shipping_name: form.name,
@@ -119,7 +109,6 @@ function CheckoutPage() {
             shipping_phone: form.phone,
             customer_note: form.note,
             payment_method: paymentMethod,
-            shipping_cost: shipping,
           },
         }),
       })
@@ -133,18 +122,18 @@ function CheckoutPage() {
   }
 
   return (
-    <div style={{ backgroundColor: '#F7F2E8', minHeight: '100vh' }}>
+    <div style={{ backgroundColor: '#F7F2E8', minHeight: '100vh' }} dir={isRTL ? 'rtl' : 'ltr'}>
       {/* Header */}
       <div style={{ backgroundColor: '#2D4A1E', padding: '28px 24px' }}>
         <div style={{ maxWidth: '960px', margin: '0 auto' }}>
           <Link to="/cart" style={{ color: 'rgba(255,255,255,0.7)', fontSize: '13px', textDecoration: 'none', fontWeight: '600' }}>
-            ← Back to Cart
+            {isRTL ? '→' : '←'} {t('cart.title')}
           </Link>
           <h1 style={{ color: '#F7F2E8', fontFamily: 'Georgia, serif', fontSize: '26px', fontWeight: '700', marginTop: '8px', marginBottom: '2px' }}>
-            Checkout
+            {t('checkout.title')}
           </h1>
           <p style={{ color: 'rgba(247,242,232,0.65)', fontSize: '13px' }}>
-            From <strong style={{ color: '#A3C46C' }}>{cart.vendorName}</strong>
+            <strong style={{ color: '#A3C46C' }}>{cart.vendorName}</strong>
           </p>
         </div>
       </div>
@@ -158,30 +147,30 @@ function CheckoutPage() {
             {/* Shipping */}
             <div style={{ backgroundColor: '#fff', borderRadius: '16px', border: '1.5px solid #e0dbd0', padding: '24px' }}>
               <h2 style={{ fontFamily: 'Georgia, serif', fontSize: '18px', color: '#1A2E0E', marginBottom: '20px' }}>
-                Shipping Information
+                {t('checkout.shippingInfo')}
               </h2>
               <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
                 <div>
-                  <label style={labelStyle}>Full Name *</label>
-                  <input value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} placeholder="John Doe" style={inputStyle} />
+                  <label style={labelStyle}>{t('checkout.fullName')} *</label>
+                  <input value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} placeholder={t('checkout.fullName')} style={inputStyle} />
                 </div>
                 <div>
-                  <label style={labelStyle}>Address *</label>
-                  <input value={form.address} onChange={e => setForm({ ...form, address: e.target.value })} placeholder="Street, Building, Floor..." style={inputStyle} />
+                  <label style={labelStyle}>{t('checkout.address')} *</label>
+                  <input value={form.address} onChange={e => setForm({ ...form, address: e.target.value })} placeholder={t('checkout.address')} style={inputStyle} />
                 </div>
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
                   <div>
-                    <label style={labelStyle}>City *</label>
-                    <input value={form.city} onChange={e => setForm({ ...form, city: e.target.value })} placeholder="Beirut" style={inputStyle} />
+                    <label style={labelStyle}>{t('checkout.city')} *</label>
+                    <input value={form.city} onChange={e => setForm({ ...form, city: e.target.value })} placeholder={t('checkout.city')} style={inputStyle} />
                   </div>
                   <div>
-                    <label style={labelStyle}>Phone *</label>
+                    <label style={labelStyle}>{t('checkout.phone')} *</label>
                     <input value={form.phone} onChange={e => setForm({ ...form, phone: e.target.value })} placeholder="+961..." style={inputStyle} />
                   </div>
                 </div>
                 <div>
-                  <label style={labelStyle}>Order Note (optional)</label>
-                  <textarea value={form.note} onChange={e => setForm({ ...form, note: e.target.value })} placeholder="Any special instructions..." rows={2} style={{ ...inputStyle, resize: 'vertical' }} />
+                  <label style={labelStyle}>{t('checkout.notes')}</label>
+                  <textarea value={form.note} onChange={e => setForm({ ...form, note: e.target.value })} placeholder={t('checkout.notes')} rows={2} style={{ ...inputStyle, resize: 'vertical' }} />
                 </div>
               </div>
             </div>
@@ -189,7 +178,7 @@ function CheckoutPage() {
             {/* Payment */}
             <div style={{ backgroundColor: '#fff', borderRadius: '16px', border: '1.5px solid #e0dbd0', padding: '24px' }}>
               <h2 style={{ fontFamily: 'Georgia, serif', fontSize: '18px', color: '#1A2E0E', marginBottom: '20px' }}>
-                Payment Method
+                {t('checkout.paymentMethod')}
               </h2>
               <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
                 {PAYMENT_OPTIONS.map(opt => (
@@ -225,12 +214,12 @@ function CheckoutPage() {
                   : cart.vendorName.slice(0, 2).toUpperCase()}
               </div>
               <div>
-                <p style={{ fontSize: '12px', color: '#5C8A2E', fontWeight: '600', margin: 0 }}>Ordering from</p>
+                <p style={{ fontSize: '12px', color: '#5C8A2E', fontWeight: '600', margin: 0 }}>{t('checkout.title')}</p>
                 <p style={{ fontSize: '15px', fontWeight: '700', color: '#1A2E0E', fontFamily: 'Georgia, serif', margin: 0 }}>{cart.vendorName}</p>
               </div>
             </div>
 
-            <h3 style={{ fontFamily: 'Georgia, serif', fontSize: '16px', color: '#1A2E0E', marginBottom: '14px' }}>Order Summary</h3>
+            <h3 style={{ fontFamily: 'Georgia, serif', fontSize: '16px', color: '#1A2E0E', marginBottom: '14px' }}>{t('cart.title')}</h3>
 
             <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', marginBottom: '16px' }}>
               {cart.items.map(({ product, quantity, variant }) => (
@@ -254,13 +243,13 @@ function CheckoutPage() {
 
             <div style={{ borderTop: '1px solid #e0dbd0', paddingTop: '14px', display: 'flex', flexDirection: 'column', gap: '8px', marginBottom: '18px' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px', color: '#4a5a3e' }}>
-                <span>Subtotal</span><span>${subtotal.toFixed(2)}</span>
+                <span>{t('cart.subtotal')}</span><span>${subtotal.toFixed(2)}</span>
               </div>
               <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px', color: '#4a5a3e' }}>
-                <span>Shipping</span><span>${shipping.toFixed(2)}</span>
+                <span>{isRTL ? 'الشحن' : 'Shipping'}</span><span>${shipping.toFixed(2)}</span>
               </div>
               <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '17px', fontWeight: '700', color: '#1A2E0E', paddingTop: '6px', borderTop: '1px solid #e0dbd0' }}>
-                <span>Total</span>
+                <span>{isRTL ? 'المجموع' : 'Total'}</span>
                 <span style={{ fontFamily: 'Georgia, serif' }}>${total.toFixed(2)}</span>
               </div>
             </div>
@@ -275,7 +264,7 @@ function CheckoutPage() {
               cursor: submitting ? 'not-allowed' : 'pointer', transition: 'background 0.2s',
               display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '10px',
             }}>
-              {submitting ? <><Spinner size={18} color="#fff" /> Placing Order...</> : 'Place Order →'}
+              {submitting ? <><Spinner size={18} color="#fff" /> {t('common.loading')}</> : `${t('checkout.placeOrder')} ${isRTL ? '←' : '→'}`}
             </button>
           </div>
         </div>

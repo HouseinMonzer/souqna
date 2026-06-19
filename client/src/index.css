@@ -1,3 +1,5 @@
+@import "tailwindcss";
+
 * {
   margin: 0;
   padding: 0;
@@ -5,10 +7,29 @@
 }
 
 body {
-  font-family: 'Segoe UI', sans-serif;
+  font-family: 'Segoe UI', 'Tahoma', sans-serif;
   background-color: #f9f6f0;
   color: #1a1a1a;
   overflow-x: hidden;
+}
+
+/* Arabic font stack — Cairo from Google Fonts for crisp Arabic glyphs */
+html[lang="ar"] body,
+html[lang="ar"] button,
+html[lang="ar"] input,
+html[lang="ar"] textarea,
+html[lang="ar"] select {
+  font-family: 'Cairo', 'IBM Plex Sans Arabic', 'Tahoma', 'Segoe UI', 'Arial', sans-serif;
+}
+
+html[lang="ar"] h1,
+html[lang="ar"] h2,
+html[lang="ar"] h3,
+html[lang="ar"] h4,
+html[lang="ar"] h5,
+html[lang="ar"] h6 {
+  font-family: 'Cairo', 'IBM Plex Sans Arabic', 'Tahoma', 'Segoe UI', 'Arial', sans-serif !important;
+  font-weight: 700;
 }
 
 img,
@@ -17,4 +38,40 @@ canvas,
 svg {
   max-width: 100%;
 }
-@import "tailwindcss";
+
+/* ─── Mobile responsive overrides for inline-styled grids ──────────────── */
+/* Collapse 2-column grids to 1 column on small screens.                   */
+/* Inline styles win unless we use !important on a more-specific selector. */
+@media (max-width: 640px) {
+  div[style*="grid-template-columns: 1fr 1fr"],
+  div[style*="grid-template-columns:1fr 1fr"],
+  div[style*="grid-template-columns: 2fr 1fr"],
+  div[style*="grid-template-columns: 1fr 2fr"] {
+    grid-template-columns: 1fr !important;
+  }
+
+  /* Reduce default padding on small screens */
+  section[style*="padding: 48px"],
+  section[style*="padding: 56px"] {
+    padding-left: 16px !important;
+    padding-right: 16px !important;
+  }
+}
+
+/* ─── Touch-friendly tap targets on mobile ─────────────────────────────── */
+@media (max-width: 640px) {
+  button {
+    min-height: 40px;
+  }
+  input,
+  select,
+  textarea {
+    font-size: 16px !important; /* prevent iOS zoom on focus */
+  }
+}
+
+/* ─── RTL helpers ─────────────────────────────────────────────────────── */
+html[dir="rtl"] input[type="search"],
+html[dir="rtl"] input[type="text"] {
+  text-align: right;
+}

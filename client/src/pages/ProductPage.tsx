@@ -1,5 +1,6 @@
 import { useParams, useNavigate } from 'react-router-dom'
 import { useState, useEffect } from 'react'
+import { useTranslation } from 'react-i18next'
 import { productService } from '../api/products'
 import { useCartStore } from '../store/cartStore'
 import { Skeleton } from '../components/ui'
@@ -19,6 +20,8 @@ function Stars({ rating }: { rating: number }) {
 function ProductPage() {
   const { slug } = useParams()
   const navigate = useNavigate()
+  const { t, i18n } = useTranslation()
+  const isRTL = i18n.language?.startsWith('ar')
   const { addItem } = useCartStore()
   const [added, setAdded] = useState(false)
   const [product, setProduct] = useState<Product | null>(null)
@@ -71,11 +74,11 @@ function ProductPage() {
 
   if (!product) {
     return (
-      <div style={{ textAlign: 'center', padding: '80px 24px', backgroundColor: '#F7F2E8', minHeight: '100vh' }}>
+      <div style={{ textAlign: 'center', padding: '80px 24px', backgroundColor: '#F7F2E8', minHeight: '100vh' }} dir={isRTL ? 'rtl' : 'ltr'}>
         <div style={{ fontSize: '64px', marginBottom: '16px' }}>😕</div>
-        <h2 style={{ fontSize: '24px', color: '#1A2E0E', marginBottom: '8px', fontFamily: 'Georgia, serif' }}>Product not found</h2>
+        <h2 style={{ fontSize: '24px', color: '#1A2E0E', marginBottom: '8px', fontFamily: 'Georgia, serif' }}>{t('products.noProducts')}</h2>
         <button onClick={() => navigate('/shop')} style={{ backgroundColor: '#2D4A1E', color: '#fff', border: 'none', borderRadius: '8px', padding: '12px 24px', fontSize: '15px', fontWeight: '600', cursor: 'pointer', marginTop: '16px' }}>
-          ← Back to Shop
+          {isRTL ? '→' : '←'} {t('nav.shop')}
         </button>
       </div>
     )
@@ -189,7 +192,7 @@ function ProductPage() {
 
             {product.categories && (
               <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                <span style={{ fontSize: '14px', color: '#7a8a6e' }}>Category:</span>
+                <span style={{ fontSize: '14px', color: '#7a8a6e' }}>{t('shop.allCategories')}:</span>
                 <span style={{ backgroundColor: '#EBF2DE', color: '#2D4A1E', fontSize: '13px', fontWeight: '600', padding: '4px 12px', borderRadius: '20px' }}>
                   {product.categories.name}
                 </span>
@@ -198,13 +201,13 @@ function ProductPage() {
 
             {/* Stock */}
             <div style={{ fontSize: '14px', color: product.stock > 0 ? '#5C8A2E' : '#e53e3e' }}>
-              {product.stock > 0 ? `✓ In stock (${product.stock} available)` : '✗ Out of stock'}
+              {product.stock > 0 ? `✓ ${t('product.stock', { count: product.stock })}` : `✗ ${t('products.outOfStock')}`}
             </div>
 
             {/* Quantity selector */}
             {product.stock > 0 && (
               <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                <span style={{ fontSize: '14px', fontWeight: '600', color: '#1A2E0E' }}>Quantity:</span>
+                <span style={{ fontSize: '14px', fontWeight: '600', color: '#1A2E0E' }}>{t('product.quantity')}:</span>
                 <div style={{ display: 'flex', alignItems: 'center', border: '1.5px solid #e0dbd0', borderRadius: '8px', overflow: 'hidden' }}>
                   <button
                     onClick={() => setQty(q => Math.max(1, q - 1))}
@@ -257,7 +260,7 @@ function ProductPage() {
                   transition: 'background-color 0.2s',
                 }}
               >
-                {added ? '✓ Added to Cart!' : '🛒 Add to Cart'}
+                {added ? t('product.addedToCart') : `🛒 ${t('product.addToCart')}`}
               </button>
               <button
                 onClick={() => navigate('/cart')}
@@ -267,7 +270,7 @@ function ProductPage() {
                   padding: '15px 20px', fontSize: '14px', cursor: 'pointer', fontWeight: '600',
                 }}
               >
-                View Cart
+                {t('product.viewCart')}
               </button>
             </div>
 
@@ -293,13 +296,13 @@ function ProductPage() {
                     {product.vendors.store_name}
                     {product.vendors.verified && <span style={{ color: '#5C8A2E', marginLeft: '6px' }}>✓</span>}
                   </div>
-                  <div style={{ fontSize: '12px', color: '#7a8a6e' }}>★ {Number(product.vendors.rating).toFixed(1)} · Visit Store →</div>
+                  <div style={{ fontSize: '12px', color: '#7a8a6e' }}>★ {Number(product.vendors.rating).toFixed(1)} · {t('vendors.visitStore')} {isRTL ? '←' : '→'}</div>
                 </div>
               </div>
             )}
 
-            <button onClick={() => navigate(-1)} style={{ backgroundColor: 'transparent', color: '#7a8a6e', border: 'none', fontSize: '14px', cursor: 'pointer', textAlign: 'left', padding: '0' }}>
-              ← Back
+            <button onClick={() => navigate(-1)} style={{ backgroundColor: 'transparent', color: '#7a8a6e', border: 'none', fontSize: '14px', cursor: 'pointer', textAlign: isRTL ? 'right' : 'left', padding: '0' }}>
+              {isRTL ? '→' : '←'} {t('common.back')}
             </button>
           </div>
         </div>
@@ -307,7 +310,7 @@ function ProductPage() {
         {/* Description */}
         {product.description && (
           <div style={{ marginBottom: '48px', backgroundColor: '#fff', borderRadius: '12px', padding: '28px', border: '1.5px solid #e0dbd0' }}>
-            <h2 style={{ fontFamily: 'Georgia, serif', fontSize: '20px', fontWeight: '700', color: '#1A2E0E', marginBottom: '16px' }}>Description</h2>
+            <h2 style={{ fontFamily: 'Georgia, serif', fontSize: '20px', fontWeight: '700', color: '#1A2E0E', marginBottom: '16px' }}>{t('product.description')}</h2>
             <p style={{ fontSize: '15px', color: '#4a5a3e', lineHeight: '1.8' }}>{product.description}</p>
           </div>
         )}
@@ -316,7 +319,7 @@ function ProductPage() {
         {related.length > 0 && (
           <div>
             <h2 style={{ fontFamily: 'Georgia, serif', fontSize: '24px', fontWeight: '700', color: '#1A2E0E', marginBottom: '24px' }}>
-              Related Products
+              {t('product.relatedProducts')}
             </h2>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(240px, 1fr))', gap: '18px' }}>
               {related.map((p) => {

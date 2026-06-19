@@ -1,11 +1,14 @@
 import { useNavigate, Link } from 'react-router-dom'
+import { useTranslation } from 'react-i18next'
 import { useCartStore } from '../store/cartStore'
 import { useAuthStore } from '../store/authStore'
 import { EmptyState } from '../components/ui'
 import { useIsMobile } from '../hooks/useMediaQuery'
 
 function CartPage() {
-  document.title = 'My Cart | SouqNa'
+  const { t, i18n } = useTranslation()
+  const isRTL = i18n.language?.startsWith('ar')
+  document.title = `${t('cart.title')} | SouQna`
   const navigate = useNavigate()
   const user = useAuthStore(s => s.user)
   const { vendorCarts, removeItem, updateQty, clearCart, total, vendorTotal } = useCartStore()
@@ -14,30 +17,30 @@ function CartPage() {
 
   if (vendorCarts.length === 0) {
     return (
-      <div style={{ backgroundColor: '#F7F2E8', minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+      <div style={{ backgroundColor: '#F7F2E8', minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center' }} dir={isRTL ? 'rtl' : 'ltr'}>
         <EmptyState
           icon="🛒"
-          title="Your cart is empty"
-          message="Discover products from local Lebanese vendors and add them to your cart."
+          title={t('cart.empty')}
+          message={t('hero.subtitle')}
           action={() => navigate('/shop')}
-          actionLabel="Browse Shop"
+          actionLabel={t('cart.startShopping')}
         />
       </div>
     )
   }
 
   return (
-    <div style={{ backgroundColor: '#F7F2E8', minHeight: '100vh' }}>
+    <div style={{ backgroundColor: '#F7F2E8', minHeight: '100vh' }} dir={isRTL ? 'rtl' : 'ltr'}>
 
       {/* Header */}
       <div style={{ backgroundColor: '#2D4A1E', padding: '32px 24px' }}>
         <div style={{ maxWidth: '960px', margin: '0 auto', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <div>
             <h1 style={{ color: '#F7F2E8', fontFamily: 'Georgia, serif', fontSize: '28px', fontWeight: '700', marginBottom: '2px' }}>
-              My Cart
+              {t('cart.title')}
             </h1>
             <p style={{ color: 'rgba(247,242,232,0.65)', fontSize: '13px' }}>
-              {totalCount} item{totalCount !== 1 ? 's' : ''} from {vendorCarts.length} store{vendorCarts.length !== 1 ? 's' : ''}
+              {totalCount} · {vendorCarts.length} {t('vendors.title').toLowerCase()}
             </p>
           </div>
           <button onClick={clearCart} style={{
@@ -48,7 +51,7 @@ function CartPage() {
             onMouseEnter={e => e.currentTarget.style.backgroundColor = 'rgba(255,255,255,0.15)'}
             onMouseLeave={e => e.currentTarget.style.backgroundColor = 'rgba(255,255,255,0.08)'}
           >
-            🗑 Clear All
+            🗑 {t('common.delete')}
           </button>
         </div>
       </div>
@@ -143,7 +146,7 @@ function CartPage() {
                         <button
                           onClick={() => removeItem(product.id, variant?.id ?? null)}
                           style={{ background: 'none', border: 'none', color: '#ef4444', fontSize: '12px', cursor: 'pointer', padding: 0, fontWeight: '600' }}
-                        >Remove</button>
+                        >{t('cart.remove')}</button>
                       </div>
                     </div>
                   ))}
@@ -152,7 +155,7 @@ function CartPage() {
                 {/* Per-vendor checkout */}
                 <div style={{ padding: '14px 20px', borderTop: '1.5px solid #e8f0dc', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '12px', flexWrap: 'wrap', backgroundColor: '#fafdf5' }}>
                   <div>
-                    <span style={{ fontSize: '13px', color: '#7a8a6e' }}>Subtotal from {vc.vendorName}</span>
+                    <span style={{ fontSize: '13px', color: '#7a8a6e' }}>{t('cart.subtotal')}</span>
                     <p style={{ fontSize: '18px', fontWeight: '700', color: '#1A2E0E', fontFamily: 'Georgia, serif', margin: '2px 0 0' }}>
                       ${vendorTotal(vc.vendorId).toFixed(2)}
                     </p>
@@ -167,21 +170,21 @@ function CartPage() {
                     onMouseEnter={e => e.currentTarget.style.backgroundColor = '#5C8A2E'}
                     onMouseLeave={e => e.currentTarget.style.backgroundColor = '#2D4A1E'}
                   >
-                    Checkout from {vc.vendorName} →
+                    {t('cart.checkout', { vendor: vc.vendorName })} {isRTL ? '←' : '→'}
                   </button>
                 </div>
               </div>
             ))}
 
             <Link to="/shop" style={{ fontSize: '14px', color: '#7a8a6e', textAlign: 'center', display: 'block', padding: '10px', textDecoration: 'none' }}>
-              ← Continue Shopping
+              {isRTL ? '→' : '←'} {t('cart.startShopping')}
             </Link>
           </div>
 
           {/* Right: Grand total */}
           <div style={{ backgroundColor: '#fff', borderRadius: '16px', border: '1.5px solid #e0dbd0', padding: '22px', position: isMobile ? 'static' : 'sticky', top: '90px', boxShadow: '0 4px 20px rgba(0,0,0,0.06)', width: '100%', boxSizing: 'border-box' }}>
             <h3 style={{ fontFamily: 'Georgia, serif', fontSize: '18px', color: '#1A2E0E', marginBottom: '18px' }}>
-              Cart Summary
+              {t('cart.title')}
             </h3>
 
             {/* Per-vendor breakdown */}
@@ -195,15 +198,11 @@ function CartPage() {
             </div>
 
             <div style={{ borderTop: '1.5px solid #e0dbd0', paddingTop: '14px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
-              <span style={{ fontSize: '16px', fontWeight: '700', color: '#1A2E0E' }}>Grand Total</span>
+              <span style={{ fontSize: '16px', fontWeight: '700', color: '#1A2E0E' }}>{t('cart.subtotal')}</span>
               <span style={{ fontSize: '24px', fontWeight: '700', color: '#2D4A1E', fontFamily: 'Georgia, serif' }}>
                 ${total().toFixed(2)}
               </span>
             </div>
-
-            <p style={{ fontSize: '12px', color: '#7a8a6e', lineHeight: 1.5, marginBottom: '16px', backgroundColor: '#f8faf5', padding: '10px 12px', borderRadius: '8px' }}>
-              💡 Each vendor is a separate store. Checkout from each one individually to complete your orders.
-            </p>
 
             <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
               {vendorCarts.map(vc => (
@@ -218,7 +217,7 @@ function CartPage() {
                   onMouseEnter={e => e.currentTarget.style.backgroundColor = '#5C8A2E'}
                   onMouseLeave={e => e.currentTarget.style.backgroundColor = '#2D4A1E'}
                 >
-                  Checkout {vc.vendorName} (${vendorTotal(vc.vendorId).toFixed(2)})
+                  {t('cart.checkout', { vendor: vc.vendorName })} (${vendorTotal(vc.vendorId).toFixed(2)})
                 </button>
               ))}
             </div>

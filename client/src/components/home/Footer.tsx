@@ -1,44 +1,48 @@
 import { Link } from 'react-router-dom'
-
-const footerLinks = [
-  {
-    title: 'Marketplace',
-    links: [
-      { label: 'Shop', to: '/shop' },
-      { label: 'Categories', to: '/shop' },
-      { label: 'Deals', to: '/shop?sort=price-asc' },
-      { label: 'New Arrivals', to: '/shop?sort=newest' },
-    ],
-  },
-  {
-    title: 'Vendors',
-    links: [
-      { label: 'Sell on SouqNa', to: '/register' },
-      { label: 'Vendor Dashboard', to: '/dashboard' },
-      { label: 'Browse Vendors', to: '/vendors' },
-      { label: 'Contact Support', to: '/contact' },
-    ],
-  },
-  {
-    title: 'Company',
-    links: [
-      { label: 'About', to: '/about' },
-      { label: 'Contact', to: '/contact' },
-      { label: 'Privacy Policy', to: '/privacy' },
-      { label: 'Terms of Service', to: '/terms' },
-    ],
-  },
-]
-
-const bottomLinks = [
-  { label: 'About', to: '/about' },
-  { label: 'Vendors', to: '/vendors' },
-  { label: 'Contact', to: '/contact' },
-]
+import { useTranslation } from 'react-i18next'
 
 function Footer() {
+  const { t, i18n } = useTranslation()
+  const isRTL = i18n.language?.startsWith('ar')
+
+  const footerLinks = [
+    {
+      title: t('footer.marketplace'),
+      links: [
+        { label: t('footer.shop'), to: '/shop' },
+        { label: t('footer.categories'), to: '/shop' },
+        { label: t('footer.deals'), to: '/shop?sort=price-asc' },
+        { label: t('footer.newArrivals'), to: '/shop?sort=newest' },
+      ],
+    },
+    {
+      title: t('footer.vendorsCol'),
+      links: [
+        { label: t('footer.sell'), to: '/register' },
+        { label: t('footer.dashboard'), to: '/dashboard' },
+        { label: t('footer.browse'), to: '/vendors' },
+        { label: t('footer.support'), to: '/contact' },
+      ],
+    },
+    {
+      title: t('footer.company'),
+      links: [
+        { label: t('footer.about'), to: '/about' },
+        { label: t('footer.contact'), to: '/contact' },
+        { label: t('footer.privacy'), to: '/privacy' },
+        { label: t('footer.terms'), to: '/terms' },
+      ],
+    },
+  ]
+
+  const bottomLinks = [
+    { label: t('footer.about'), to: '/about' },
+    { label: t('footer.vendorsCol'), to: '/vendors' },
+    { label: t('footer.contact'), to: '/contact' },
+  ]
+
   return (
-    <footer style={{ backgroundColor: '#2D4A1E', borderTop: '2px solid #5C8A2E' }}>
+    <footer style={{ backgroundColor: '#2D4A1E', borderTop: '2px solid #5C8A2E' }} dir={isRTL ? 'rtl' : 'ltr'}>
       <div style={{ maxWidth: '1200px', margin: '0 auto', padding: '48px 24px 28px' }}>
 
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: '40px', marginBottom: '40px' }}>
@@ -49,7 +53,7 @@ function Footer() {
               <span style={{ fontFamily: 'Georgia, serif', fontSize: '20px', fontWeight: '700', color: '#A3C46C' }}>na</span>
             </div>
             <p style={{ color: 'rgba(247,242,232,0.55)', fontSize: '14px', lineHeight: '1.65', fontWeight: '300', marginBottom: '16px' }}>
-              Lebanon's trusted multivendor marketplace. Connecting buyers with authentic local vendors since 2024.
+              {t('footer.rights')}
             </p>
           </div>
 
@@ -77,7 +81,7 @@ function Footer() {
 
         <div style={{ borderTop: '1px solid rgba(255,255,255,0.1)', paddingTop: '24px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '12px' }}>
           <span style={{ color: 'rgba(247,242,232,0.4)', fontSize: '13px' }}>
-            © 2025 SouqNa. All rights reserved.
+            {t('footer.rights')}
           </span>
           <div style={{ display: 'flex', gap: '20px' }}>
             {bottomLinks.map(link => (

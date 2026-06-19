@@ -1,5 +1,6 @@
 import { useParams, useNavigate, Link } from 'react-router-dom'
 import { useEffect, useState, useMemo } from 'react'
+import { useTranslation } from 'react-i18next'
 import { vendorService } from '../api/vendors'
 import { productService } from '../api/products'
 import { useCartStore } from '../store/cartStore'
@@ -13,6 +14,8 @@ type SortOption = 'newest' | 'price-asc' | 'price-desc' | 'popular'
 function VendorProfilePage() {
   const { slug } = useParams()
   const navigate = useNavigate()
+  const { t, i18n } = useTranslation()
+  const isRTL = i18n.language?.startsWith('ar')
   const { addItem } = useCartStore()
 
   const [vendor, setVendor] = useState<Vendor | null>(null)
@@ -26,7 +29,7 @@ function VendorProfilePage() {
 
   useEffect(() => {
     if (!slug) return
-    document.title = 'Loading... | SouqNa'
+    document.title = `${t('common.loading')} | SouQna`
     const fetchData = async () => {
       setLoading(true)
       try {
@@ -119,9 +122,9 @@ function VendorProfilePage() {
 
   if (!vendor) {
     return (
-      <div style={{ backgroundColor: '#F7F2E8', minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-        <EmptyState icon="😕" title="Vendor not found" message="This vendor doesn't exist or has been removed."
-          action={() => navigate('/vendors')} actionLabel="← Browse Vendors" />
+      <div style={{ backgroundColor: '#F7F2E8', minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center' }} dir={isRTL ? 'rtl' : 'ltr'}>
+        <EmptyState icon="😕" title={t('vendors.noVendors')} message=""
+          action={() => navigate('/vendors')} actionLabel={`${isRTL ? '→' : '←'} ${t('vendors.title')}`} />
       </div>
     )
   }
@@ -141,7 +144,7 @@ function VendorProfilePage() {
   const allSocialLinks = [...socialLinks, ...vendorSocialLinks]
 
   return (
-    <div style={{ backgroundColor: '#F7F2E8', minHeight: '100vh' }}>
+    <div style={{ backgroundColor: '#F7F2E8', minHeight: '100vh' }} dir={isRTL ? 'rtl' : 'ltr'}>
 
       {/* ── Cover + Profile Hero ─────────────────────────────────────────── */}
       <div style={{ position: 'relative' }}>
@@ -159,10 +162,10 @@ function VendorProfilePage() {
 
           {/* Breadcrumb */}
           <div style={{ position: 'absolute', top: '20px', left: '24px', right: '24px', maxWidth: '1200px', margin: '0 auto', display: 'flex', gap: '8px', fontSize: '13px' }}>
-            <span onClick={() => navigate('/')} style={{ color: 'rgba(255,255,255,0.65)', cursor: 'pointer' }}>Home</span>
-            <span style={{ color: 'rgba(255,255,255,0.4)' }}>›</span>
-            <span onClick={() => navigate('/vendors')} style={{ color: 'rgba(255,255,255,0.65)', cursor: 'pointer' }}>Vendors</span>
-            <span style={{ color: 'rgba(255,255,255,0.4)' }}>›</span>
+            <span onClick={() => navigate('/')} style={{ color: 'rgba(255,255,255,0.65)', cursor: 'pointer' }}>{t('nav.home')}</span>
+            <span style={{ color: 'rgba(255,255,255,0.4)' }}>{isRTL ? '‹' : '›'}</span>
+            <span onClick={() => navigate('/vendors')} style={{ color: 'rgba(255,255,255,0.65)', cursor: 'pointer' }}>{t('nav.vendors')}</span>
+            <span style={{ color: 'rgba(255,255,255,0.4)' }}>{isRTL ? '‹' : '›'}</span>
             <span style={{ color: '#fff', fontWeight: '600' }}>{vendor.store_name}</span>
           </div>
         </div>
@@ -195,7 +198,7 @@ function VendorProfilePage() {
                 </h1>
                 {vendor.verified && (
                   <span style={{ backgroundColor: '#EBF2DE', color: '#2D4A1E', fontSize: '11px', fontWeight: '700', padding: '3px 10px', borderRadius: '20px', letterSpacing: '0.05em' }}>
-                    ✓ Verified
+                    ✓ {t('vendors.verified')}
                   </span>
                 )}
               </div>
@@ -251,10 +254,10 @@ function VendorProfilePage() {
       <div style={{ maxWidth: '1200px', margin: '20px auto 0', padding: '0 24px' }}>
         <div style={{ display: 'grid', gridTemplateColumns: isMobile ? 'repeat(2, 1fr)' : 'repeat(4, 1fr)', gap: '12px', marginBottom: '32px' }}>
           {[
-            { icon: '⭐', label: 'Rating', val: `${Number(vendor.rating).toFixed(1)}`, sub: `${vendor.total_reviews} reviews` },
-            { icon: '🛍️', label: 'Total Sales', val: String(vendor.total_sales), sub: 'Orders delivered' },
-            { icon: '📦', label: 'Products', val: String(products.length), sub: 'Active listings' },
-            { icon: '📅', label: 'Member Since', val: String(new Date(vendor.joined_at).getFullYear()), sub: new Date(vendor.joined_at).toLocaleDateString('en', { month: 'long' }) },
+            { icon: '⭐', label: t('shop.sortPopular'), val: `${Number(vendor.rating).toFixed(1)}`, sub: `${vendor.total_reviews}` },
+            { icon: '🛍️', label: t('checkout.title'), val: String(vendor.total_sales), sub: '' },
+            { icon: '📦', label: t('vendors.products'), val: String(products.length), sub: '' },
+            { icon: '📅', label: '', val: String(new Date(vendor.joined_at).getFullYear()), sub: new Date(vendor.joined_at).toLocaleDateString(isRTL ? 'ar' : 'en', { month: 'long' }) },
           ].map(s => (
             <div key={s.label} style={{
               backgroundColor: '#fff', borderRadius: '14px', border: '1.5px solid #e0dbd0',
@@ -270,13 +273,13 @@ function VendorProfilePage() {
         {/* ── Search + Filter + Sort ────────────────────────────────────── */}
         <div style={{ display: 'flex', gap: '12px', alignItems: 'center', flexWrap: 'wrap', marginBottom: '16px' }}>
           <div style={{ flex: 1, minWidth: '200px', position: 'relative' }}>
-            <span style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: '#7a8a6e', fontSize: '14px', pointerEvents: 'none' }}>🔍</span>
+            <span style={{ position: 'absolute', [isRTL ? 'right' : 'left']: '12px', top: '50%', transform: 'translateY(-50%)', color: '#7a8a6e', fontSize: '14px', pointerEvents: 'none' } as React.CSSProperties}>🔍</span>
             <input
               type="text"
               value={search}
               onChange={e => setSearch(e.target.value)}
-              placeholder={`Search in ${vendor.store_name}...`}
-              style={{ width: '100%', padding: '10px 14px 10px 36px', borderRadius: '10px', border: '1.5px solid #e0dbd0', fontSize: '14px', color: '#1A2E0E', outline: 'none', boxSizing: 'border-box', backgroundColor: '#fff' }}
+              placeholder={`${t('common.search')} ${vendor.store_name}...`}
+              style={{ width: '100%', padding: isRTL ? '10px 36px 10px 14px' : '10px 14px 10px 36px', borderRadius: '10px', border: '1.5px solid #e0dbd0', fontSize: '14px', color: '#1A2E0E', outline: 'none', boxSizing: 'border-box', backgroundColor: '#fff' }}
               onFocus={e => e.currentTarget.style.borderColor = '#5C8A2E'}
               onBlur={e => e.currentTarget.style.borderColor = '#e0dbd0'}
             />
@@ -286,10 +289,10 @@ function VendorProfilePage() {
             onChange={e => setSort(e.target.value as SortOption)}
             style={{ padding: '10px 14px', borderRadius: '10px', border: '1.5px solid #e0dbd0', fontSize: '14px', color: '#1A2E0E', backgroundColor: '#fff', outline: 'none', cursor: 'pointer' }}
           >
-            <option value="newest">Newest First</option>
-            <option value="price-asc">Price: Low to High</option>
-            <option value="price-desc">Price: High to Low</option>
-            <option value="popular">Most Popular</option>
+            <option value="newest">{t('shop.sortNewest')}</option>
+            <option value="price-asc">{t('shop.sortPriceAsc')}</option>
+            <option value="price-desc">{t('shop.sortPriceDesc')}</option>
+            <option value="popular">{t('shop.sortPopular')}</option>
           </select>
         </div>
 
@@ -306,7 +309,7 @@ function VendorProfilePage() {
                 border: `1.5px solid ${activeCategory === 'all' ? '#2D4A1E' : '#e0dbd0'}`,
               }}
             >
-              All ({products.length})
+              {t('shop.allCategories')} ({products.length})
             </button>
             {categories.map(cat => (
               <button
@@ -330,7 +333,7 @@ function VendorProfilePage() {
         <div style={{ marginBottom: '60px' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: '20px' }}>
             <h2 style={{ fontSize: '20px', fontWeight: '700', color: '#1A2E0E', fontFamily: 'Georgia, serif', margin: 0 }}>
-              Products
+              {t('vendors.products')}
             </h2>
             <span style={{ fontSize: '13px', color: '#7a8a6e' }}>
               {filteredProducts.length} {filteredProducts.length !== products.length ? `of ${products.length}` : ''} listing{filteredProducts.length !== 1 ? 's' : ''}

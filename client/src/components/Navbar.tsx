@@ -1,18 +1,15 @@
 import { useEffect, useState } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
+import { useTranslation } from 'react-i18next'
 import { useCartStore } from '../store/cartStore'
 import { useAuthStore } from '../store/authStore'
 import { useIsMobile } from '../hooks/useMediaQuery'
-
-const navLinks = [
-  { label: 'Home', path: '/' },
-  { label: 'Shop', path: '/shop' },
-  { label: 'Vendors', path: '/vendors' },
-]
+import { toggleLanguage } from '../lib/i18n'
 
 function Navbar() {
   const location = useLocation()
   const navigate = useNavigate()
+  const { t, i18n } = useTranslation()
   const [menuOpen, setMenuOpen] = useState(false)
   const [searchQuery, setSearchQuery] = useState('')
   const [mobileSearch, setMobileSearch] = useState('')
@@ -20,6 +17,13 @@ function Navbar() {
   const user = useAuthStore(s => s.user)
   const logout = useAuthStore(s => s.logout)
   const isMobile = useIsMobile()
+  const isRTL = i18n.language?.startsWith('ar')
+
+  const navLinks = [
+    { label: t('nav.home'), path: '/' },
+    { label: t('nav.shop'), path: '/shop' },
+    { label: t('nav.vendors'), path: '/vendors' },
+  ]
 
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault()
@@ -39,8 +43,31 @@ function Navbar() {
 
   useEffect(() => { setMenuOpen(false) }, [location.pathname])
 
+  const langBtn = (
+    <button
+      onClick={toggleLanguage}
+      aria-label="Toggle language"
+      style={{
+        background: 'rgba(255,255,255,0.08)',
+        border: '1px solid rgba(163,196,108,0.35)',
+        borderRadius: '6px',
+        color: '#A3C46C',
+        fontSize: '13px',
+        fontWeight: 600,
+        padding: '6px 12px',
+        cursor: 'pointer',
+        whiteSpace: 'nowrap',
+        transition: 'all 0.2s',
+      }}
+      onMouseEnter={e => (e.currentTarget.style.backgroundColor = 'rgba(255,255,255,0.16)')}
+      onMouseLeave={e => (e.currentTarget.style.backgroundColor = 'rgba(255,255,255,0.08)')}
+    >
+      🌐 {t('nav.language')}
+    </button>
+  )
+
   return (
-    <nav style={{ backgroundColor: '#2D4A1E', borderBottom: '2px solid #5C8A2E', position: 'sticky', top: 0, zIndex: 50 }}>
+    <nav style={{ backgroundColor: '#2D4A1E', borderBottom: '2px solid #5C8A2E', position: 'sticky', top: 0, zIndex: 50 }} dir={isRTL ? 'rtl' : 'ltr'}>
 
       <div style={{ maxWidth: '1400px', margin: '0 auto', padding: '0 24px', display: 'flex', alignItems: 'center', height: '72px', gap: '16px' }}>
 
@@ -52,7 +79,7 @@ function Navbar() {
         <div style={{ display: isMobile ? 'none' : 'flex', alignItems: 'center', gap: '4px', flexShrink: 0 }}>
           {navLinks.map((link) => (
             <Link
-              key={link.label}
+              key={link.path}
               to={link.path}
               style={{
                 textDecoration: 'none', fontSize: '15px', padding: '6px 14px', borderRadius: '6px', whiteSpace: 'nowrap',
@@ -69,19 +96,20 @@ function Navbar() {
         </div>
 
         <form onSubmit={handleSearch} style={{ flex: 1, position: 'relative', minWidth: 0, display: isMobile ? 'none' : 'block' }}>
-          <span style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: 'rgba(255,255,255,0.4)', fontSize: '14px', pointerEvents: 'none' }}>🔍</span>
+          <span style={{ position: 'absolute', [isRTL ? 'right' : 'left']: '12px', top: '50%', transform: 'translateY(-50%)', color: 'rgba(255,255,255,0.4)', fontSize: '14px', pointerEvents: 'none' } as React.CSSProperties}>🔍</span>
           <input
             type="text"
             value={searchQuery}
             onChange={e => setSearchQuery(e.target.value)}
-            placeholder="Search products, vendors..."
-            style={{ width: '100%', padding: '8px 16px 8px 36px', borderRadius: '8px', border: '1px solid rgba(163,196,108,0.25)', backgroundColor: 'rgba(255,255,255,0.08)', color: '#F7F2E8', fontSize: '14px', outline: 'none', boxSizing: 'border-box', transition: 'background 0.2s' }}
+            placeholder={t('nav.searchPlaceholder')}
+            style={{ width: '100%', padding: isRTL ? '8px 36px 8px 16px' : '8px 16px 8px 36px', borderRadius: '8px', border: '1px solid rgba(163,196,108,0.25)', backgroundColor: 'rgba(255,255,255,0.08)', color: '#F7F2E8', fontSize: '14px', outline: 'none', boxSizing: 'border-box', transition: 'background 0.2s' }}
             onFocus={e => (e.currentTarget.style.backgroundColor = 'rgba(255,255,255,0.15)')}
             onBlur={e => (e.currentTarget.style.backgroundColor = 'rgba(255,255,255,0.08)')}
           />
         </form>
 
         <div style={{ display: isMobile ? 'none' : 'flex', alignItems: 'center', gap: '8px', flexShrink: 0 }}>
+          {langBtn}
           {user ? (
             <>
               <span style={{ fontSize: '13px', color: 'rgba(255,255,255,0.7)', maxWidth: '130px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
@@ -89,12 +117,12 @@ function Navbar() {
               </span>
               {user.profile?.role === 'admin' && (
                 <Link to="/admin" style={{ fontSize: '13px', color: '#ffcc00', textDecoration: 'none', fontWeight: '600', padding: '5px 12px', backgroundColor: 'rgba(255,204,0,0.15)', borderRadius: '6px', whiteSpace: 'nowrap' }}>
-                  ⚙ Admin
+                  ⚙ {t('nav.admin')}
                 </Link>
               )}
               {(user.profile?.role === 'vendor' || user.profile?.role === 'customer') && (
                 <Link to="/dashboard" style={{ fontSize: '13px', color: '#A3C46C', textDecoration: 'none', fontWeight: '600', padding: '5px 12px', backgroundColor: 'rgba(163,196,108,0.15)', borderRadius: '6px', whiteSpace: 'nowrap' }}>
-                  {user.profile?.role === 'vendor' ? 'Dashboard' : 'Sell'}
+                  {user.profile?.role === 'vendor' ? t('nav.dashboard') : t('nav.sell')}
                 </Link>
               )}
               <button
@@ -103,7 +131,7 @@ function Navbar() {
                 onMouseEnter={e => (e.currentTarget.style.backgroundColor = 'rgba(255,255,255,0.15)')}
                 onMouseLeave={e => (e.currentTarget.style.backgroundColor = 'rgba(255,255,255,0.08)')}
               >
-                Logout
+                {t('nav.logout')}
               </button>
             </>
           ) : (
@@ -112,13 +140,13 @@ function Navbar() {
                 onMouseEnter={e => (e.currentTarget.style.borderColor = '#A3C46C')}
                 onMouseLeave={e => (e.currentTarget.style.borderColor = 'rgba(163,196,108,0.35)')}
               >
-                Sign In
+                {t('nav.signIn')}
               </Link>
               <Link to="/register" style={{ fontSize: '13px', fontWeight: '600', color: '#fff', textDecoration: 'none', backgroundColor: '#5C8A2E', padding: '6px 16px', borderRadius: '6px', whiteSpace: 'nowrap', transition: 'background 0.2s' }}
                 onMouseEnter={e => (e.currentTarget.style.backgroundColor = '#4a7226')}
                 onMouseLeave={e => (e.currentTarget.style.backgroundColor = '#5C8A2E')}
               >
-                Register
+                {t('nav.register')}
               </Link>
             </>
           )}
@@ -126,11 +154,11 @@ function Navbar() {
 
         <button
           onClick={() => navigate('/cart')}
-          style={{ flexShrink: 0, marginLeft: isMobile ? 'auto' : undefined, display: 'flex', alignItems: 'center', gap: '6px', padding: '7px 14px', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.15)', backgroundColor: 'rgba(255,255,255,0.08)', color: '#F7F2E8', fontSize: '14px', cursor: 'pointer', transition: 'background 0.2s' }}
+          style={{ flexShrink: 0, marginInlineStart: isMobile ? 'auto' : undefined, display: 'flex', alignItems: 'center', gap: '6px', padding: '7px 14px', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.15)', backgroundColor: 'rgba(255,255,255,0.08)', color: '#F7F2E8', fontSize: '14px', cursor: 'pointer', transition: 'background 0.2s' }}
           onMouseEnter={e => (e.currentTarget.style.backgroundColor = 'rgba(255,255,255,0.16)')}
           onMouseLeave={e => (e.currentTarget.style.backgroundColor = 'rgba(255,255,255,0.08)')}
         >
-          🛒 Cart
+          🛒 {!isMobile && t('nav.cart')}
           <span style={{ backgroundColor: totalItems > 0 ? '#5C8A2E' : 'rgba(255,255,255,0.2)', color: '#fff', borderRadius: '50%', width: '20px', height: '20px', fontSize: '11px', fontWeight: '700', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
             {totalItems}
           </span>
@@ -138,7 +166,7 @@ function Navbar() {
 
         <button
           onClick={() => setMenuOpen(!menuOpen)}
-          aria-label="Menu"
+          aria-label={t('nav.menu')}
           style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '4px', flexShrink: 0, display: isMobile ? 'flex' : 'none', alignItems: 'center' }}
         >
           <div style={{ width: '22px', display: 'flex', flexDirection: 'column', gap: '5px' }}>
@@ -151,24 +179,24 @@ function Navbar() {
       </div>
 
       {isMobile && (
-      <div style={{ maxHeight: menuOpen ? '500px' : '0', overflow: 'hidden', transition: 'max-height 0.3s ease', borderTop: menuOpen ? '1px solid rgba(163,196,108,0.15)' : 'none' }}>
+      <div style={{ maxHeight: menuOpen ? '600px' : '0', overflow: 'hidden', transition: 'max-height 0.3s ease', borderTop: menuOpen ? '1px solid rgba(163,196,108,0.15)' : 'none' }}>
         <div style={{ padding: '16px 24px', display: 'flex', flexDirection: 'column', gap: '4px' }}>
 
           <div style={{ position: 'relative', marginBottom: '8px' }}>
-            <span style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: 'rgba(255,255,255,0.4)', fontSize: '14px', pointerEvents: 'none' }}>🔍</span>
+            <span style={{ position: 'absolute', [isRTL ? 'right' : 'left']: '12px', top: '50%', transform: 'translateY(-50%)', color: 'rgba(255,255,255,0.4)', fontSize: '14px', pointerEvents: 'none' } as React.CSSProperties}>🔍</span>
             <input
               type="text"
-              placeholder="Search products..."
+              placeholder={t('nav.searchPlaceholder')}
               value={mobileSearch}
               onChange={e => setMobileSearch(e.target.value)}
               onKeyDown={handleMobileSearch}
-              style={{ width: '100%', padding: '10px 14px 10px 36px', borderRadius: '8px', border: '1px solid rgba(163,196,108,0.25)', backgroundColor: 'rgba(255,255,255,0.08)', color: '#F7F2E8', fontSize: '14px', outline: 'none', boxSizing: 'border-box' }}
+              style={{ width: '100%', padding: isRTL ? '10px 36px 10px 14px' : '10px 14px 10px 36px', borderRadius: '8px', border: '1px solid rgba(163,196,108,0.25)', backgroundColor: 'rgba(255,255,255,0.08)', color: '#F7F2E8', fontSize: '14px', outline: 'none', boxSizing: 'border-box' }}
             />
           </div>
 
           {navLinks.map((link) => (
             <Link
-              key={link.label}
+              key={link.path}
               to={link.path}
               onClick={() => setMenuOpen(false)}
               style={{ textDecoration: 'none', fontSize: '15px', padding: '10px 14px', borderRadius: '8px', color: location.pathname === link.path ? '#F7F2E8' : '#A3C46C', backgroundColor: location.pathname === link.path ? 'rgba(255,255,255,0.12)' : 'transparent' }}
@@ -177,20 +205,22 @@ function Navbar() {
             </Link>
           ))}
 
+          <div style={{ marginTop: '8px' }}>{langBtn}</div>
+
           <div style={{ borderTop: '1px solid rgba(163,196,108,0.15)', marginTop: '8px', paddingTop: '8px' }}>
             {user ? (
               <>
                 {user.profile?.role === 'admin' && (
-                  <Link to="/admin" onClick={() => setMenuOpen(false)} style={{ display: 'block', padding: '10px 14px', borderRadius: '8px', color: '#ffcc00', textDecoration: 'none', fontSize: '15px', fontWeight: '600' }}>⚙ Admin Panel</Link>
+                  <Link to="/admin" onClick={() => setMenuOpen(false)} style={{ display: 'block', padding: '10px 14px', borderRadius: '8px', color: '#ffcc00', textDecoration: 'none', fontSize: '15px', fontWeight: '600' }}>⚙ {t('nav.admin')}</Link>
                 )}
-                <Link to="/dashboard" onClick={() => setMenuOpen(false)} style={{ display: 'block', padding: '10px 14px', borderRadius: '8px', color: '#A3C46C', textDecoration: 'none', fontSize: '15px' }}>Dashboard</Link>
-                <Link to="/cart" onClick={() => setMenuOpen(false)} style={{ display: 'block', padding: '10px 14px', borderRadius: '8px', color: '#A3C46C', textDecoration: 'none', fontSize: '15px' }}>🛒 Cart ({totalItems})</Link>
-                <button onClick={() => { logout(); navigate('/'); setMenuOpen(false) }} style={{ width: '100%', textAlign: 'left', padding: '10px 14px', borderRadius: '8px', background: 'none', border: 'none', color: 'rgba(247,242,232,0.6)', fontSize: '15px', cursor: 'pointer' }}>Logout</button>
+                <Link to="/dashboard" onClick={() => setMenuOpen(false)} style={{ display: 'block', padding: '10px 14px', borderRadius: '8px', color: '#A3C46C', textDecoration: 'none', fontSize: '15px' }}>{t('nav.dashboard')}</Link>
+                <Link to="/cart" onClick={() => setMenuOpen(false)} style={{ display: 'block', padding: '10px 14px', borderRadius: '8px', color: '#A3C46C', textDecoration: 'none', fontSize: '15px' }}>🛒 {t('nav.cart')} ({totalItems})</Link>
+                <button onClick={() => { logout(); navigate('/'); setMenuOpen(false) }} style={{ width: '100%', textAlign: isRTL ? 'right' : 'left', padding: '10px 14px', borderRadius: '8px', background: 'none', border: 'none', color: 'rgba(247,242,232,0.6)', fontSize: '15px', cursor: 'pointer' }}>{t('nav.logout')}</button>
               </>
             ) : (
               <>
-                <Link to="/sign-in" onClick={() => setMenuOpen(false)} style={{ display: 'block', padding: '10px 14px', borderRadius: '8px', color: '#A3C46C', textDecoration: 'none', fontSize: '15px' }}>Sign In</Link>
-                <Link to="/register" onClick={() => setMenuOpen(false)} style={{ display: 'block', padding: '10px 14px', borderRadius: '8px', color: '#F7F2E8', textDecoration: 'none', fontSize: '15px', backgroundColor: '#5C8A2E', textAlign: 'center', marginTop: '4px' }}>Register</Link>
+                <Link to="/sign-in" onClick={() => setMenuOpen(false)} style={{ display: 'block', padding: '10px 14px', borderRadius: '8px', color: '#A3C46C', textDecoration: 'none', fontSize: '15px' }}>{t('nav.signIn')}</Link>
+                <Link to="/register" onClick={() => setMenuOpen(false)} style={{ display: 'block', padding: '10px 14px', borderRadius: '8px', color: '#F7F2E8', textDecoration: 'none', fontSize: '15px', backgroundColor: '#5C8A2E', textAlign: 'center', marginTop: '4px' }}>{t('nav.register')}</Link>
               </>
             )}
           </div>

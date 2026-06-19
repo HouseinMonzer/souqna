@@ -1,5 +1,6 @@
 import { useState, useEffect, useMemo, type SetStateAction } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { useTranslation } from 'react-i18next'
 import { fetchVendors, type VendorType } from '../api/vendors'
 import { sampleVendors } from '../data/sampleData'
 import { Skeleton } from '../components/ui'
@@ -8,6 +9,7 @@ const categories = ['All', 'Organic', 'Food', 'Electronics', 'Beauty', 'Home']
 
 function VendorCard({ vendor }: { vendor: VendorType }) {
   const navigate = useNavigate()
+  const { t } = useTranslation()
   const [hovered, setHovered] = useState(false)
 
   return (
@@ -49,7 +51,7 @@ function VendorCard({ vendor }: { vendor: VendorType }) {
       </div>
 
       <p style={{ fontSize: '13px', color: '#7a8a6e', lineHeight: '1.6', marginBottom: '16px' }}>
-        {vendor.description || 'Lebanese vendor on SouQna'}
+        {vendor.description || ''}
       </p>
 
       <div style={{
@@ -57,9 +59,9 @@ function VendorCard({ vendor }: { vendor: VendorType }) {
         gap: '8px', paddingTop: '16px', borderTop: '1px solid #e0dbd0',
       }}>
         {[
-          { label: 'Rating', val: vendor.rating > 0 ? `⭐ ${vendor.rating}` : 'New' },
-          { label: 'Sales', val: vendor.sales || 0 },
-          { label: 'Products', val: vendor.products },
+          { label: t('shop.sortPopular'), val: vendor.rating > 0 ? `⭐ ${vendor.rating}` : '—' },
+          { label: t('checkout.title'), val: vendor.sales || 0 },
+          { label: t('vendors.products'), val: vendor.products },
         ].map(s => (
           <div key={s.label} style={{ textAlign: 'center' }}>
             <div style={{ fontSize: '14px', fontWeight: '700', color: '#1A2E0E', fontFamily: 'Georgia, serif' }}>
@@ -79,7 +81,9 @@ function VendorCard({ vendor }: { vendor: VendorType }) {
 }
 
 function VendorsPage() {
-  document.title = 'Vendors | SouqNa'
+  const { t, i18n } = useTranslation()
+  const isRTL = i18n.language?.startsWith('ar')
+  document.title = `${t('nav.vendors')} | SouQna`
   const [activeCategory, setActiveCategory] = useState('All')
   const [search, setSearch] = useState('')
   const [vendors, setVendors] = useState<VendorType[]>([])
@@ -110,24 +114,24 @@ function VendorsPage() {
   }, [vendors, activeCategory, search])
 
   return (
-    <div style={{ backgroundColor: '#F7F2E8', minHeight: '100vh' }}>
+    <div style={{ backgroundColor: '#F7F2E8', minHeight: '100vh' }} dir={isRTL ? 'rtl' : 'ltr'}>
       <div style={{ backgroundColor: '#2D4A1E', padding: '36px 24px' }}>
         <div style={{ maxWidth: '1200px', margin: '0 auto' }}>
           <h1 style={{ color: '#F7F2E8', fontFamily: 'Georgia, serif', fontSize: '32px', fontWeight: '700', marginBottom: '6px' }}>
-            Our Vendors
+            {t('vendors.title')}
           </h1>
           <p style={{ color: 'rgba(247,242,232,0.65)', fontSize: '15px' }}>
-            {loading ? 'Loading...' : `${vendors.length} verified vendors across Lebanon`}
+            {loading ? t('common.loading') : `${vendors.length} ${t('vendors.verified')}`}
           </p>
         </div>
       </div>
 
       <div style={{ maxWidth: '1200px', margin: '0 auto', padding: '32px 24px' }}>
         <div style={{ position: 'relative', marginBottom: '20px', maxWidth: '480px' }}>
-          <span style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', fontSize: '14px', color: '#7a8a6e', pointerEvents: 'none' }}>🔍</span>
+          <span style={{ position: 'absolute', [isRTL ? 'right' : 'left']: '12px', top: '50%', transform: 'translateY(-50%)', fontSize: '14px', color: '#7a8a6e', pointerEvents: 'none' } as React.CSSProperties}>🔍</span>
           <input
             type="text"
-            placeholder="Search vendors..."
+            placeholder={t('nav.searchPlaceholder')}
             value={search}
             onChange={e => setSearch(e.target.value)}
             style={{
@@ -174,12 +178,12 @@ function VendorsPage() {
         ) : filtered.length === 0 ? (
           <div style={{ textAlign: 'center', padding: '80px 0', color: '#7a8a6e' }}>
             <div style={{ fontSize: '48px', marginBottom: '16px' }}>🏪</div>
-            <p style={{ fontSize: '18px', color: '#1A2E0E', fontWeight: '600', marginBottom: '8px' }}>No vendors found</p>
+            <p style={{ fontSize: '18px', color: '#1A2E0E', fontWeight: '600', marginBottom: '8px' }}>{t('vendors.noVendors')}</p>
           </div>
         ) : (
           <>
             <p style={{ fontSize: '14px', color: '#7a8a6e', marginBottom: '20px' }}>
-              Showing {filtered.length} vendor{filtered.length !== 1 ? 's' : ''}
+              {filtered.length} {t('nav.vendors').toLowerCase()}
             </p>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: '20px' }}>
               {filtered.map(vendor => <VendorCard key={vendor.id} vendor={vendor} />)}

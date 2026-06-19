@@ -1,4 +1,5 @@
 import { useNavigate } from 'react-router-dom'
+import { useTranslation } from 'react-i18next'
 
 const vendors = [
   { name: 'Green Valley', category: 'Organic', rating: 4.9, sales: '1.2k', initials: 'GV', color: '#4a7c59', slug: 'green-valley' },
@@ -9,14 +10,16 @@ const vendors = [
 
 function VendorsSection() {
   const navigate = useNavigate()
+  const { t, i18n } = useTranslation()
+  const isRTL = i18n.language?.startsWith('ar')
 
   return (
-    <section style={{ padding: '0 24px 48px' }}>
+    <section style={{ padding: '0 24px 48px' }} dir={isRTL ? 'rtl' : 'ltr'}>
       <div style={{ maxWidth: '1200px', margin: '0 auto' }}>
 
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: '24px' }}>
           <h2 style={{ fontSize: '22px', fontWeight: '700', color: '#1A2E0E', fontFamily: 'Georgia, serif' }}>
-            Top vendors this week
+            {t('vendors.title')}
           </h2>
           <span
             onClick={() => navigate('/vendors')}
@@ -24,7 +27,7 @@ function VendorsSection() {
             onMouseEnter={e => e.currentTarget.style.textDecoration = 'underline'}
             onMouseLeave={e => e.currentTarget.style.textDecoration = 'none'}
           >
-            View all →
+            {t('vendors.viewAll')}
           </span>
         </div>
 

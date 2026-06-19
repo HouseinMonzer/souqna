@@ -73,11 +73,10 @@ function ImageUploadField({ value, onChange, label }: { value: string; onChange:
   )
 }
 
-// ─── ProductImageUpload (uses imgbb fallback) ───────────────────────────────
+// ─── ProductImageUpload (uploads through server → UploadThing) ──────────────
 function ProductImageUpload({ value, onChange }: { value: string; onChange: (url: string) => void }) {
   const [uploading, setUploading] = useState(false)
   const [error, setError] = useState('')
-  const IMGBB_KEY = import.meta.env.VITE_IMGBB_API_KEY as string
 
   const handleFile = async (file: File) => {
     if (!file.type.startsWith('image/')) { setError('Please select an image file'); return }
@@ -85,22 +84,14 @@ function ProductImageUpload({ value, onChange }: { value: string; onChange: (url
     setError('')
     setUploading(true)
     try {
-      if (IMGBB_KEY) {
-        const reader = new FileReader()
-        const dataUrl: string = await new Promise((res, rej) => { reader.onload = e => res(e.target?.result as string); reader.onerror = rej; reader.readAsDataURL(file) })
-        const base64 = dataUrl.split(',')[1]
-        const form = new FormData()
-        form.append('key', IMGBB_KEY)
-        form.append('image', base64)
-        const res = await fetch('https://api.imgbb.com/1/upload', { method: 'POST', body: form })
-        const json = await res.json()
-        if (!json.success) throw new Error(json.error?.message || 'Upload failed')
-        onChange(json.data.url)
-      } else {
-        const reader = new FileReader()
-        const dataUrl: string = await new Promise((res, rej) => { reader.onload = e => res(e.target?.result as string); reader.onerror = rej; reader.readAsDataURL(file) })
-        onChange(dataUrl)
-      }
+      const reader = new FileReader()
+      const dataUrl: string = await new Promise((res, rej) => { reader.onload = e => res(e.target?.result as string); reader.onerror = rej; reader.readAsDataURL(file) })
+      const json = await apiFetch<{ url: string; publicId?: string }>('/api/upload', {
+        method: 'POST',
+        body: JSON.stringify({ imageData: dataUrl, folder: 'products' }),
+      })
+      if (!json.url) throw new Error('Upload failed')
+      onChange(json.url)
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'Upload failed')
     } finally {

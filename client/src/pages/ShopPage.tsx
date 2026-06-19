@@ -1,5 +1,6 @@
 import { useCallback, useState, useEffect } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
+import { useTranslation } from 'react-i18next'
 import { apiFetch } from '../lib/api'
 import { productService } from '../api/products'
 import { useCartStore } from '../store/cartStore'
@@ -19,6 +20,8 @@ function Stars({ rating }: { rating: number }) {
 
 function ShopPage() {
   const navigate = useNavigate()
+  const { t, i18n } = useTranslation()
+  const isRTL = i18n.language?.startsWith('ar')
   const [searchParams] = useSearchParams()
   const [search, setSearch] = useState(() => searchParams.get('search') || '')
   const [sortBy, setSortBy] = useState(() => searchParams.get('sort') || 'default')
@@ -29,7 +32,7 @@ function ShopPage() {
   const [addedId, setAddedId] = useState<string | null>(null)
   const { addItem } = useCartStore()
 
-  document.title = 'Shop | SouqNa'
+  document.title = `${t('shop.title')} | SouQna`
 
   // Sync URL search param to state on mount / URL change
   useEffect(() => {
@@ -100,16 +103,16 @@ function ShopPage() {
   }
 
   return (
-    <div style={{ backgroundColor: '#F7F2E8', minHeight: '100vh' }}>
+    <div style={{ backgroundColor: '#F7F2E8', minHeight: '100vh' }} dir={isRTL ? 'rtl' : 'ltr'}>
 
       {/* Header */}
       <div style={{ backgroundColor: '#2D4A1E', padding: '36px 24px' }}>
         <div style={{ maxWidth: '1200px', margin: '0 auto' }}>
           <h1 style={{ color: '#F7F2E8', fontFamily: 'Georgia, serif', fontSize: '32px', fontWeight: '700', marginBottom: '6px' }}>
-            Shop
+            {t('shop.title')}
           </h1>
           <p style={{ color: 'rgba(247,242,232,0.65)', fontSize: '15px' }}>
-            {loading ? 'Loading...' : `${products.length} products available`}
+            {loading ? t('common.loading') : t('shop.showing', { count: products.length })}
           </p>
         </div>
       </div>
@@ -119,14 +122,14 @@ function ShopPage() {
         {/* Search + Sort */}
         <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '28px', flexWrap: 'wrap' }}>
           <div style={{ position: 'relative', flex: 1, minWidth: '200px' }}>
-            <span style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', fontSize: '14px', color: '#7a8a6e' }}>🔍</span>
+            <span style={{ position: 'absolute', [isRTL ? 'right' : 'left']: '12px', top: '50%', transform: 'translateY(-50%)', fontSize: '14px', color: '#7a8a6e' } as React.CSSProperties}>🔍</span>
             <input
               type="text"
-              placeholder="Search products..."
+              placeholder={t('nav.searchPlaceholder')}
               value={search}
               onChange={e => setSearch(e.target.value)}
               style={{
-                width: '100%', padding: '10px 16px 10px 36px',
+                width: '100%', padding: isRTL ? '10px 36px 10px 16px' : '10px 16px 10px 36px',
                 borderRadius: '8px', border: '1.5px solid #e0dbd0',
                 backgroundColor: '#fff', fontSize: '14px', color: '#1A2E0E',
                 outline: 'none', boxSizing: 'border-box',
@@ -144,10 +147,10 @@ function ShopPage() {
               fontSize: '14px', color: '#1A2E0E', outline: 'none', cursor: 'pointer',
             }}
           >
-            <option value="default">Sort: Newest</option>
-            <option value="price-asc">Price: Low → High</option>
-            <option value="price-desc">Price: High → Low</option>
-            <option value="rating">Top Rated</option>
+            <option value="default">{t('shop.sortNewest')}</option>
+            <option value="price-asc">{t('shop.sortPriceAsc')}</option>
+            <option value="price-desc">{t('shop.sortPriceDesc')}</option>
+            <option value="rating">{t('shop.sortPopular')}</option>
           </select>
         </div>
 
@@ -163,7 +166,7 @@ function ShopPage() {
               color: !activeCategory ? '#F7F2E8' : '#1A2E0E',
             }}
           >
-            All
+            {t('shop.allCategories')}
           </button>
           {categories.map(cat => (
             <button
@@ -190,19 +193,18 @@ function ShopPage() {
         ) : products.length === 0 ? (
           <div style={{ textAlign: 'center', padding: '80px 0', color: '#7a8a6e' }}>
             <div style={{ fontSize: '48px', marginBottom: '16px' }}>🔍</div>
-            <p style={{ fontSize: '18px', fontWeight: '600', color: '#1A2E0E', marginBottom: '8px' }}>No products found</p>
-            <p style={{ fontSize: '14px' }}>Try a different search or category</p>
+            <p style={{ fontSize: '18px', fontWeight: '600', color: '#1A2E0E', marginBottom: '8px' }}>{t('products.noProducts')}</p>
             <button
               onClick={() => { setSearch(''); setActiveCategory(null); setSortBy('default') }}
               style={{ marginTop: '16px', padding: '10px 24px', backgroundColor: '#2D4A1E', color: '#fff', border: 'none', borderRadius: '8px', fontSize: '14px', fontWeight: '600', cursor: 'pointer' }}
             >
-              Clear filters
+              {t('products.clearFilters')}
             </button>
           </div>
         ) : (
           <>
             <p style={{ fontSize: '14px', color: '#7a8a6e', marginBottom: '20px' }}>
-              Showing {products.length} product{products.length !== 1 ? 's' : ''}
+              {t('shop.showing', { count: products.length })}
             </p>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))', gap: '20px' }}>
               {products.map((product) => {
@@ -274,7 +276,7 @@ function ShopPage() {
                             fontWeight: '600', cursor: 'pointer', transition: 'background-color 0.2s',
                           }}
                         >
-                          {addedId === product.id ? '✓ Added' : '+ Cart'}
+                          {addedId === product.id ? t('products.added') : t('products.addToCart')}
                         </button>
                       </div>
                     </div>

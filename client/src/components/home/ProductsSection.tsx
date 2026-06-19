@@ -1,4 +1,5 @@
 import { useNavigate } from 'react-router-dom'
+import { useTranslation } from 'react-i18next'
 
 const products = [
   { id: 1, name: 'Organic Olive Oil 500ml', vendor: 'Green Valley', price: 12.00, rating: 4.9, reviews: 142, emoji: '🫒', badge: 'Bestseller' },
@@ -29,15 +30,17 @@ function Stars({ rating }: { rating: number }) {
 
 function ProductsSection() {
   const navigate = useNavigate()
+  const { t, i18n } = useTranslation()
+  const isRTL = i18n.language?.startsWith('ar')
 
   return (
-    <section style={{ padding: '0 24px 48px' }}>
+    <section style={{ padding: '0 24px 48px' }} dir={isRTL ? 'rtl' : 'ltr'}>
       <div style={{ maxWidth: '1200px', margin: '0 auto' }}>
 
         {/* Header */}
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: '24px' }}>
           <h2 style={{ fontSize: '22px', fontWeight: '700', color: '#1A2E0E', fontFamily: 'Georgia, serif' }}>
-            Featured products
+            {t('products.featured')}
           </h2>
           <span
             onClick={() => navigate('/shop')}
@@ -45,7 +48,7 @@ function ProductsSection() {
             onMouseEnter={e => e.currentTarget.style.textDecoration = 'underline'}
             onMouseLeave={e => e.currentTarget.style.textDecoration = 'none'}
           >
-            View all →
+            {t('products.viewAll')}
           </span>
         </div>
 
@@ -123,7 +126,7 @@ function ProductsSection() {
                     onMouseEnter={e => e.currentTarget.style.backgroundColor = '#5C8A2E'}
                     onMouseLeave={e => e.currentTarget.style.backgroundColor = '#2D4A1E'}
                   >
-                    + Cart
+                    {t('products.addToCart')}
                   </button>
                 </div>
               </div>
