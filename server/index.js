@@ -153,7 +153,7 @@ app.use(session({
   cookie: {
     httpOnly: true,
     secure: IS_PROD,
-    sameSite: IS_PROD ? 'lax' : 'lax',
+    sameSite: IS_PROD ? 'none' : 'lax',
     maxAge: 10 * 60 * 1000,
   },
 }))
@@ -410,7 +410,7 @@ function setAuthCookie(res, user) {
   res.cookie(AUTH_COOKIE, token, {
     httpOnly: true,
     secure: IS_PROD,
-    sameSite: 'lax',
+    sameSite: IS_PROD ? 'none' : 'lax',
     maxAge: AUTH_COOKIE_MAX_AGE,
     path: '/',
   })
@@ -418,7 +418,12 @@ function setAuthCookie(res, user) {
 }
 
 function clearAuthCookie(res) {
-  res.clearCookie(AUTH_COOKIE, { httpOnly: true, secure: IS_PROD, sameSite: 'lax', path: '/' })
+  res.clearCookie(AUTH_COOKIE, {
+    httpOnly: true,
+    secure: IS_PROD,
+    sameSite: IS_PROD ? 'none' : 'lax',
+    path: '/',
+  })
 }
 
 function mapVendor(vendor) {
