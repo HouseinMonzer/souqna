@@ -8,8 +8,8 @@ export interface VendorType {
   slug: string
   name: string
   initials: string
-  logoUrl: string | null
-  coverUrl: string | null
+  logoUrl?: string | null
+  coverUrl?: string | null
   category: string
   description: string
   rating: number
