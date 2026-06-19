@@ -116,7 +116,7 @@ app.use(cors({
   credentials: true,
 }))
 
-app.use(express.json({ limit: '2mb' }))
+app.use(express.json({ limit: '8mb' }))
 app.use(cookieParser())
 
 // ─── Global rate limit (broad safety net) + per-route limiters below ────────

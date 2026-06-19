@@ -31,11 +31,15 @@ function VendorCard({ vendor }: { vendor: VendorType }) {
       <div style={{ display: 'flex', alignItems: 'center', gap: '14px', marginBottom: '16px' }}>
         <div style={{
           width: '52px', height: '52px', borderRadius: '50%',
-          backgroundColor: vendor.color, color: '#fff',
+          backgroundColor: vendor.logoUrl ? '#fff' : vendor.color,
+          color: '#fff', overflow: 'hidden',
           display: 'flex', alignItems: 'center', justifyContent: 'center',
           fontWeight: '700', fontSize: '16px', flexShrink: 0,
+          border: vendor.logoUrl ? `1.5px solid ${vendor.color}` : 'none',
         }}>
-          {vendor.initials}
+          {vendor.logoUrl
+            ? <img src={vendor.logoUrl} alt={vendor.name} loading="lazy" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+            : vendor.initials}
         </div>
         <div>
           <h3 style={{ fontSize: '16px', fontWeight: '700', color: '#1A2E0E', fontFamily: 'Georgia, serif', marginBottom: '4px' }}>

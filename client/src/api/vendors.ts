@@ -6,6 +6,8 @@ export interface VendorType {
   slug: string
   name: string
   initials: string
+  logoUrl: string | null
+  coverUrl: string | null
   category: string
   description: string
   rating: number
@@ -112,6 +114,8 @@ export async function fetchVendors(): Promise<VendorType[]> {
     slug: vendor.slug,
     name: vendor.business_name || vendor.store_name || 'Unnamed Vendor',
     initials: getInitials(vendor.business_name || vendor.store_name || 'Vendor'),
+    logoUrl: vendor.logo_url ?? null,
+    coverUrl: vendor.cover_url ?? null,
     category: vendor.mission || 'General',
     description: vendor.description || '',
     rating: Number(vendor.rating || 0),

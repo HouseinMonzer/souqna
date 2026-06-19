@@ -5,6 +5,7 @@ import { apiFetch } from '../lib/api'
 import { productService } from '../api/products'
 import { useAuthStore } from '../store/authStore'
 import { Spinner } from '../components/ui'
+import { compressImage, ImagePresets } from '../lib/imageUtils'
 import type { Product, ProductInsert, VendorSubscription } from '../types/database.types'
 
 const emptyVendorForm = { storeName: '', description: '', category: '', location: '', phone: '' }
@@ -15,25 +16,20 @@ const labelStyle: React.CSSProperties = { display: 'block', fontSize: '13px', fo
 const inputStyle: React.CSSProperties = { width: '100%', padding: '11px 14px', borderRadius: '8px', border: '1.5px solid #e0dbd0', fontSize: '14px', color: '#1A2E0E', outline: 'none', boxSizing: 'border-box', fontFamily: 'inherit', backgroundColor: '#fff' }
 
 // ─── Image upload helper ────────────────────────────────────────────────────
-function ImageUploadField({ value, onChange, label }: { value: string; onChange: (url: string) => void; label: string }) {
+function ImageUploadField({ value, onChange, label, preset = 'cover' }: { value: string; onChange: (url: string) => void; label: string; preset?: 'cover' | 'logo' }) {
   const [uploading, setUploading] = useState(false)
   const [error, setError] = useState('')
 
   const handleFile = async (file: File) => {
     if (!file.type.startsWith('image/')) { setError('Please select an image file'); return }
-    if (file.size > 5 * 1024 * 1024) { setError('Image must be under 5MB'); return }
+    if (file.size > 10 * 1024 * 1024) { setError('Image must be under 10MB'); return }
     setError('')
     setUploading(true)
     try {
-      const reader = new FileReader()
-      const dataUrl: string = await new Promise((res, rej) => {
-        reader.onload = e => res(e.target?.result as string)
-        reader.onerror = rej
-        reader.readAsDataURL(file)
-      })
+      const dataUrl = await compressImage(file, ImagePresets[preset])
       onChange(dataUrl)
     } catch {
-      setError('Failed to read file')
+      setError('Failed to process image')
     } finally {
       setUploading(false)
     }
@@ -80,12 +76,11 @@ function ProductImageUpload({ value, onChange }: { value: string; onChange: (url
 
   const handleFile = async (file: File) => {
     if (!file.type.startsWith('image/')) { setError('Please select an image file'); return }
-    if (file.size > 5 * 1024 * 1024) { setError('Image must be under 5MB'); return }
+    if (file.size > 10 * 1024 * 1024) { setError('Image must be under 10MB'); return }
     setError('')
     setUploading(true)
     try {
-      const reader = new FileReader()
-      const dataUrl: string = await new Promise((res, rej) => { reader.onload = e => res(e.target?.result as string); reader.onerror = rej; reader.readAsDataURL(file) })
+      const dataUrl = await compressImage(file, ImagePresets.product)
       const json = await apiFetch<{ url: string; publicId?: string }>('/api/upload', {
         method: 'POST',
         body: JSON.stringify({ imageData: dataUrl, folder: 'products' }),
@@ -553,14 +548,16 @@ function DashboardPage() {
               {/* Cover & Logo */}
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
                 <ImageUploadField
-                  label="Cover Photo (1400×400 recommended)"
+                  label="Cover Photo (1920×720 recommended)"
                   value={coverData || vendor?.cover_url || ''}
                   onChange={setCoverData}
+                  preset="cover"
                 />
                 <ImageUploadField
-                  label="Store Logo"
+                  label="Store Logo (square)"
                   value={logoData || vendor?.logo_url || ''}
                   onChange={setLogoData}
+                  preset="logo"
                 />
               </div>
 
