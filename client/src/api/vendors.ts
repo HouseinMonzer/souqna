@@ -1,6 +1,8 @@
 import { apiFetch } from '../lib/api'
 import type { Vendor, VendorSummary, VendorUpdate } from '../types/database.types'
 
+// Shape consumed by VendorsPage VendorCard. logoUrl/coverUrl added in commit
+// 24afb84 — if a deployed bundle is missing these, force a rebuild.
 export interface VendorType {
   id: string
   slug: string
