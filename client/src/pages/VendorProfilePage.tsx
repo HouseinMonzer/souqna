@@ -6,6 +6,7 @@ import { productService } from '../api/products'
 import { useCartStore } from '../store/cartStore'
 import { Stars, ProductCardSkeleton, EmptyState } from '../components/ui'
 import { useIsMobile } from '../hooks/useMediaQuery'
+import { PlatformIcon } from '../components/icons/SocialIcons'
 import type { Vendor, Product, Category } from '../types/database.types'
 
 
@@ -130,16 +131,17 @@ function VendorProfilePage() {
   }
 
   const socialLinks = [
-    vendor.instagram && { icon: '📸', href: vendor.instagram.startsWith('http') ? vendor.instagram : `https://instagram.com/${vendor.instagram}`, label: 'Instagram' },
-    vendor.facebook && { icon: '👥', href: vendor.facebook.startsWith('http') ? vendor.facebook : `https://facebook.com/${vendor.facebook}`, label: 'Facebook' },
-    vendor.tiktok && { icon: '🎵', href: vendor.tiktok.startsWith('http') ? vendor.tiktok : `https://tiktok.com/@${vendor.tiktok}`, label: 'TikTok' },
-    vendor.youtube && { icon: '▶️', href: vendor.youtube.startsWith('http') ? vendor.youtube : `https://youtube.com/${vendor.youtube}`, label: 'YouTube' },
-  ].filter(Boolean) as { icon: string; href: string; label: string }[]
+    vendor.instagram && { platform: 'instagram', href: vendor.instagram.startsWith('http') ? vendor.instagram : `https://instagram.com/${vendor.instagram}`, label: 'Instagram' },
+    vendor.facebook && { platform: 'facebook', href: vendor.facebook.startsWith('http') ? vendor.facebook : `https://facebook.com/${vendor.facebook}`, label: 'Facebook' },
+    vendor.tiktok && { platform: 'tiktok', href: vendor.tiktok.startsWith('http') ? vendor.tiktok : `https://tiktok.com/@${vendor.tiktok}`, label: 'TikTok' },
+    vendor.youtube && { platform: 'youtube', href: vendor.youtube.startsWith('http') ? vendor.youtube : `https://youtube.com/${vendor.youtube}`, label: 'YouTube' },
+  ].filter(Boolean) as { platform: string; href: string; label: string }[]
 
-  const vendorSocialLinks = (vendor.social_links || []).map(sl => {
-    const icons: Record<string, string> = { instagram: '📸', facebook: '👥', tiktok: '🎵', youtube: '▶️', twitter: '🐦', linkedin: '💼' }
-    return { icon: icons[sl.platform] || '🔗', href: sl.url, label: sl.platform }
-  })
+  const vendorSocialLinks = (vendor.social_links || []).map(sl => ({
+    platform: sl.platform.toLowerCase(),
+    href: sl.url,
+    label: sl.platform,
+  }))
 
   const allSocialLinks = [...socialLinks, ...vendorSocialLinks]
 
@@ -227,19 +229,23 @@ function VendorProfilePage() {
               {/* Social links inline with the meta row so they sit beside WhatsApp/Website */}
               {allSocialLinks.length > 0 && (
                 <span style={{ display: 'inline-flex', gap: '8px', marginLeft: 'auto' }}>
-                  {allSocialLinks.map(sl => (
-                    <a key={sl.href} href={sl.href} target="_blank" rel="noopener noreferrer" title={sl.label} style={{
-                      width: '32px', height: '32px', borderRadius: '50%', backgroundColor: '#EBF2DE',
-                      display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '15px',
-                      textDecoration: 'none', transition: 'background 0.2s', border: '1.5px solid #c8d8a8',
-                  }}
-                    onMouseEnter={e => e.currentTarget.style.backgroundColor = '#d0e8b0'}
-                    onMouseLeave={e => e.currentTarget.style.backgroundColor = '#EBF2DE'}
-                  >
-                    {sl.icon}
-                  </a>
-                ))}
-              </span>
+                  {allSocialLinks.map(sl => {
+                    const Icon = PlatformIcon[sl.platform] || PlatformIcon.instagram
+                    return (
+                      <a key={sl.href} href={sl.href} target="_blank" rel="noopener noreferrer" title={sl.label} style={{
+                        width: '32px', height: '32px', borderRadius: '50%', backgroundColor: '#EBF2DE',
+                        display: 'flex', alignItems: 'center', justifyContent: 'center',
+                        color: '#2D4A1E',
+                        textDecoration: 'none', transition: 'all 0.2s', border: '1.5px solid #c8d8a8',
+                      }}
+                        onMouseEnter={e => { e.currentTarget.style.backgroundColor = '#2D4A1E'; e.currentTarget.style.color = '#fff' }}
+                        onMouseLeave={e => { e.currentTarget.style.backgroundColor = '#EBF2DE'; e.currentTarget.style.color = '#2D4A1E' }}
+                      >
+                        <Icon size={16} />
+                      </a>
+                    )
+                  })}
+                </span>
               )}
             </div>
           </div>
