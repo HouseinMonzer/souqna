@@ -43,6 +43,7 @@ function LoginPage() {
   const signIn = useAuthStore(s => s.signIn)
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
+  const [showPassword, setShowPassword] = useState(false)
   const [error, setError] = useState(searchParams.get('error') === 'google' ? (isRTL ? 'فشل تسجيل الدخول عبر Google. حاول مجدداً.' : 'Google sign-in failed. Please try again.') : '')
   const [submitting, setSubmitting] = useState(false)
   const [needsVerification, setNeedsVerification] = useState(false)
@@ -155,8 +156,33 @@ function LoginPage() {
           style={{ width: '100%', minHeight: 44, padding: '10px 12px', borderRadius: 10, border: '1.5px solid #e0dbd0', fontSize: 15, boxSizing: 'border-box', marginBottom: 14 }} />
 
         <label style={{ display: 'block', fontSize: 13, fontWeight: 700, color: '#1A2E0E', marginBottom: 6 }} htmlFor="password">{t('auth.password')}</label>
-        <input id="password" type="password" autoComplete="current-password" value={password} onChange={e => setPassword(e.target.value)}
-          style={{ width: '100%', minHeight: 44, padding: '10px 12px', borderRadius: 10, border: '1.5px solid #e0dbd0', fontSize: 15, boxSizing: 'border-box', marginBottom: 18 }} />
+        <div style={{ position: 'relative', marginBottom: 18 }}>
+          <input id="password" type={showPassword ? 'text' : 'password'} autoComplete="current-password" value={password} onChange={e => setPassword(e.target.value)}
+            style={{ width: '100%', minHeight: 44, padding: isRTL ? '10px 12px 10px 44px' : '10px 44px 10px 12px', borderRadius: 10, border: '1.5px solid #e0dbd0', fontSize: 15, boxSizing: 'border-box' }} />
+          <button type="button" onClick={() => setShowPassword(s => !s)}
+            aria-label={showPassword ? (isRTL ? 'إخفاء كلمة المرور' : 'Hide password') : (isRTL ? 'إظهار كلمة المرور' : 'Show password')}
+            style={{
+              position: 'absolute', top: '50%', transform: 'translateY(-50%)',
+              [isRTL ? 'left' : 'right']: 8,
+              width: 32, height: 32, padding: 0, border: 'none', borderRadius: 8,
+              backgroundColor: 'transparent', cursor: 'pointer', color: '#5C8A2E',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+            }}>
+            {showPassword ? (
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                <path d="M9.88 9.88a3 3 0 1 0 4.24 4.24" />
+                <path d="M10.73 5.08A10.43 10.43 0 0 1 12 5c7 0 10 7 10 7a13.16 13.16 0 0 1-1.67 2.68" />
+                <path d="M6.61 6.61A13.526 13.526 0 0 0 2 12s3 7 10 7a9.74 9.74 0 0 0 5.39-1.61" />
+                <line x1="2" y1="2" x2="22" y2="22" />
+              </svg>
+            ) : (
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                <path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7-11-7-11-7z" />
+                <circle cx="12" cy="12" r="3" />
+              </svg>
+            )}
+          </button>
+        </div>
 
         <button type="submit" disabled={submitting} style={{ width: '100%', minHeight: 46, backgroundColor: submitting ? '#7a9d58' : '#5C8A2E', color: '#fff', border: 'none', borderRadius: 10, fontSize: 15, fontWeight: 700, cursor: submitting ? 'default' : 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
           {submitting && <Spinner />}
