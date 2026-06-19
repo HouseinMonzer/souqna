@@ -170,73 +170,68 @@ function VendorProfilePage() {
           </div>
         </div>
 
-        {/* Profile card overlapping cover */}
+        {/* Profile card — logo overlaps cover, text sits below on white area */}
         <div style={{ maxWidth: '1200px', margin: '0 auto', padding: '0 24px' }}>
+          {/* Logo overlapping cover bottom */}
           <div style={{
-            marginTop: '-70px', position: 'relative', zIndex: 10,
-            display: 'flex', alignItems: 'flex-end', gap: '20px', flexWrap: 'wrap',
+            marginTop: '-60px', position: 'relative', zIndex: 10,
+            width: '120px', height: '120px', borderRadius: '50%',
+            border: '4px solid #F7F2E8',
+            backgroundColor: vendor.logo_url ? '#fff' : '#2D4A1E',
+            overflow: 'hidden', boxShadow: '0 4px 20px rgba(0,0,0,0.2)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            fontWeight: '700', fontSize: '32px', color: '#F7F2E8',
           }}>
-            {/* Logo */}
-            <div style={{
-              width: '120px', height: '120px', borderRadius: '50%',
-              border: '4px solid #F7F2E8',
-              backgroundColor: vendor.logo_url ? 'transparent' : '#2D4A1E',
-              overflow: 'hidden', flexShrink: 0, boxShadow: '0 4px 20px rgba(0,0,0,0.2)',
-              display: 'flex', alignItems: 'center', justifyContent: 'center',
-              fontWeight: '700', fontSize: '32px', color: '#F7F2E8',
-            }}>
-              {vendor.logo_url
-                ? <img src={vendor.logo_url} alt={vendor.store_name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-                : vendor.store_name.slice(0, 2).toUpperCase()}
-            </div>
+            {vendor.logo_url
+              ? <img src={vendor.logo_url} alt={vendor.store_name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+              : vendor.store_name.slice(0, 2).toUpperCase()}
+          </div>
 
-            {/* Store info */}
-            <div style={{ flex: 1, minWidth: '200px', paddingBottom: '12px' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap', marginBottom: '4px' }}>
-                <h1 style={{ fontFamily: 'Georgia, serif', fontSize: '28px', fontWeight: '700', color: '#1A2E0E', margin: 0 }}>
-                  {vendor.store_name}
-                </h1>
-                {vendor.verified && (
-                  <span style={{ backgroundColor: '#EBF2DE', color: '#2D4A1E', fontSize: '11px', fontWeight: '700', padding: '3px 10px', borderRadius: '20px', letterSpacing: '0.05em' }}>
-                    ✓ {t('vendors.verified')}
-                  </span>
-                )}
-              </div>
-              {vendor.description && (
-                <p style={{ fontSize: '15px', color: '#4a5a3e', margin: '0 0 8px', lineHeight: 1.5 }}>
-                  {vendor.description}
-                </p>
+          {/* Store info — fully below cover on F7F2E8 background, dark text reads cleanly */}
+          <div style={{ marginTop: '14px', paddingBottom: '8px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap', marginBottom: '6px' }}>
+              <h1 style={{ fontFamily: 'Georgia, serif', fontSize: '28px', fontWeight: '700', color: '#1A2E0E', margin: 0 }}>
+                {vendor.store_name}
+              </h1>
+              {vendor.verified && (
+                <span style={{ backgroundColor: '#EBF2DE', color: '#2D4A1E', fontSize: '11px', fontWeight: '700', padding: '3px 10px', borderRadius: '20px', letterSpacing: '0.05em' }}>
+                  ✓ {t('vendors.verified')}
+                </span>
               )}
-              <div style={{ display: 'flex', gap: '14px', fontSize: '13px', color: '#7a8a6e', flexWrap: 'wrap', alignItems: 'center' }}>
-                {vendor.location && <span>📍 {vendor.location}</span>}
-                <span>🗓 Since {new Date(vendor.joined_at).getFullYear()}</span>
-                {vendor.phone && (
-                  <a href={`tel:${vendor.phone}`} style={{ color: '#5C8A2E', fontWeight: '600', textDecoration: 'none' }}>
-                    📞 {vendor.phone}
-                  </a>
-                )}
-                {vendor.whatsapp && (
-                  <a href={`https://wa.me/${vendor.whatsapp.replace(/\D/g, '')}`} target="_blank" rel="noopener noreferrer"
-                    style={{ backgroundColor: '#25D366', color: '#fff', fontSize: '12px', fontWeight: '700', padding: '4px 10px', borderRadius: '20px', textDecoration: 'none' }}>
-                    WhatsApp
-                  </a>
-                )}
-                {vendor.website && (
-                  <a href={vendor.website} target="_blank" rel="noopener noreferrer" style={{ color: '#5C8A2E', fontWeight: '600', textDecoration: 'none' }}>
-                    🌐 Website
-                  </a>
-                )}
-              </div>
             </div>
+            {vendor.description && (
+              <p style={{ fontSize: '15px', color: '#4a5a3e', margin: '0 0 10px', lineHeight: 1.5, maxWidth: '780px' }}>
+                {vendor.description}
+              </p>
+            )}
+            <div style={{ display: 'flex', gap: '14px', fontSize: '13px', color: '#7a8a6e', flexWrap: 'wrap', alignItems: 'center', rowGap: '10px' }}>
+              {vendor.location && <span>📍 {vendor.location}</span>}
+              <span>🗓 Since {new Date(vendor.joined_at).getFullYear()}</span>
+              {vendor.phone && (
+                <a href={`tel:${vendor.phone}`} style={{ color: '#5C8A2E', fontWeight: '600', textDecoration: 'none' }}>
+                  📞 {vendor.phone}
+                </a>
+              )}
+              {vendor.whatsapp && (
+                <a href={`https://wa.me/${vendor.whatsapp.replace(/\D/g, '')}`} target="_blank" rel="noopener noreferrer"
+                  style={{ backgroundColor: '#25D366', color: '#fff', fontSize: '12px', fontWeight: '700', padding: '4px 10px', borderRadius: '20px', textDecoration: 'none' }}>
+                  WhatsApp
+                </a>
+              )}
+              {vendor.website && (
+                <a href={vendor.website} target="_blank" rel="noopener noreferrer" style={{ color: '#5C8A2E', fontWeight: '600', textDecoration: 'none' }}>
+                  🌐 Website
+                </a>
+              )}
 
-            {/* Social links */}
-            {allSocialLinks.length > 0 && (
-              <div style={{ display: 'flex', gap: '8px', paddingBottom: '16px' }}>
-                {allSocialLinks.map(sl => (
-                  <a key={sl.href} href={sl.href} target="_blank" rel="noopener noreferrer" title={sl.label} style={{
-                    width: '36px', height: '36px', borderRadius: '50%', backgroundColor: '#EBF2DE',
-                    display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '16px',
-                    textDecoration: 'none', transition: 'background 0.2s', border: '1.5px solid #c8d8a8',
+              {/* Social links inline with the meta row so they sit beside WhatsApp/Website */}
+              {allSocialLinks.length > 0 && (
+                <span style={{ display: 'inline-flex', gap: '8px', marginLeft: 'auto' }}>
+                  {allSocialLinks.map(sl => (
+                    <a key={sl.href} href={sl.href} target="_blank" rel="noopener noreferrer" title={sl.label} style={{
+                      width: '32px', height: '32px', borderRadius: '50%', backgroundColor: '#EBF2DE',
+                      display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '15px',
+                      textDecoration: 'none', transition: 'background 0.2s', border: '1.5px solid #c8d8a8',
                   }}
                     onMouseEnter={e => e.currentTarget.style.backgroundColor = '#d0e8b0'}
                     onMouseLeave={e => e.currentTarget.style.backgroundColor = '#EBF2DE'}
@@ -244,8 +239,9 @@ function VendorProfilePage() {
                     {sl.icon}
                   </a>
                 ))}
-              </div>
-            )}
+              </span>
+              )}
+            </div>
           </div>
         </div>
       </div>

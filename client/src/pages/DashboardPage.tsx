@@ -5,7 +5,7 @@ import { apiFetch } from '../lib/api'
 import { productService } from '../api/products'
 import { useAuthStore } from '../store/authStore'
 import { Spinner } from '../components/ui'
-import { compressImage, ImagePresets } from '../lib/imageUtils'
+import { processImage, ImagePresets } from '../lib/imageUtils'
 import type { Product, ProductInsert, VendorSubscription } from '../types/database.types'
 
 const emptyVendorForm = { storeName: '', description: '', category: '', location: '', phone: '' }
@@ -26,7 +26,7 @@ function ImageUploadField({ value, onChange, label, preset = 'cover' }: { value:
     setError('')
     setUploading(true)
     try {
-      const dataUrl = await compressImage(file, ImagePresets[preset])
+      const dataUrl = await processImage(file, ImagePresets[preset])
       onChange(dataUrl)
     } catch {
       setError('Failed to process image')
@@ -80,7 +80,7 @@ function ProductImageUpload({ value, onChange }: { value: string; onChange: (url
     setError('')
     setUploading(true)
     try {
-      const dataUrl = await compressImage(file, ImagePresets.product)
+      const dataUrl = await processImage(file, ImagePresets.product)
       const json = await apiFetch<{ url: string; publicId?: string }>('/api/upload', {
         method: 'POST',
         body: JSON.stringify({ imageData: dataUrl, folder: 'products' }),
