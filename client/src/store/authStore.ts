@@ -1,6 +1,6 @@
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
-import { AUTH_TOKEN_KEY, apiFetch } from '../lib/api'
+import { apiFetch } from '../lib/api'
 import type { AuthUser } from '../types/database.types'
 
 interface AuthState {
@@ -16,44 +16,38 @@ interface AuthState {
 
 export const useAuthStore = create<AuthState>()(
   persist(
-    (set) => ({
+    (set, get) => ({
       user: null,
       loading: false,
       setUser: (user) => set({ user }),
       loadUser: async () => {
-        if (!localStorage.getItem(AUTH_TOKEN_KEY)) {
-          set({ user: null, loading: false })
-          return
-        }
+        // Skip if no persisted user and not coming from a fresh sign-in
+        // We still verify on every load when user appears to be logged in
         set({ loading: true })
-        for (let attempt = 0; attempt < 4; attempt++) {
-          try {
-            const response = await apiFetch<{ user: AuthUser }>('/api/auth/me')
-            set({ user: response.user ?? null, loading: false })
-            return
-          } catch {
-            if (attempt < 3) await new Promise(r => setTimeout(r, 400 * (attempt + 1)))
-          }
+        try {
+          const response = await apiFetch<{ user: AuthUser }>('/api/auth/me')
+          set({ user: response.user ?? null, loading: false })
+        } catch {
+          // 401 means the cookie is gone — clear local state
+          if (get().user !== null) set({ user: null, loading: false })
+          else set({ loading: false })
         }
-        localStorage.removeItem(AUTH_TOKEN_KEY)
-        set({ user: null, loading: false })
       },
       logout: () => {
-        localStorage.removeItem(AUTH_TOKEN_KEY)
         set({ user: null, loading: false })
+        apiFetch('/api/auth/logout', { method: 'POST' }).catch(() => {})
       },
       signOut: () => {
-        localStorage.removeItem(AUTH_TOKEN_KEY)
         set({ user: null, loading: false })
+        apiFetch('/api/auth/logout', { method: 'POST' }).catch(() => {})
       },
       signIn: async (email, password) => {
         set({ loading: true })
         try {
-          const response = await apiFetch<{ token: string; user: AuthUser }>('/api/auth/login', {
+          const response = await apiFetch<{ user: AuthUser }>('/api/auth/login', {
             method: 'POST',
             body: JSON.stringify({ email, password }),
           })
-          localStorage.setItem(AUTH_TOKEN_KEY, response.token)
           set({ user: response.user, loading: false })
           return response.user
         } catch (error) {
@@ -64,13 +58,11 @@ export const useAuthStore = create<AuthState>()(
       signUp: async (email, password, name) => {
         set({ loading: true })
         try {
-          // Register now returns { message, email, needsVerification } — no token yet
           await apiFetch<{ message: string; email: string; needsVerification: boolean }>('/api/auth/register', {
             method: 'POST',
             body: JSON.stringify({ email, password, name }),
           })
           set({ loading: false })
-          // Return a sentinel so the caller knows to redirect to verify-pending
           return { needsVerification: true, email } as unknown as AuthUser
         } catch (error) {
           set({ loading: false })

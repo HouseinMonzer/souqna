@@ -9,8 +9,11 @@ const passport = require('passport')
 const GoogleStrategy = require('passport-google-oauth20').Strategy
 const FacebookStrategy = require('passport-facebook').Strategy
 const rateLimit = require('express-rate-limit')
+const helmet = require('helmet')
+const xss = require('xss')
+const cookieParser = require('cookie-parser')
 const { PrismaClient } = require('@prisma/client')
-const { v2: cloudinary } = require('cloudinary')
+const { UTApi, UTFile } = require('uploadthing/server')
 const { z } = require('zod')
 const bcrypt = require('bcrypt')
 const jwt = require('jsonwebtoken')
@@ -25,34 +28,134 @@ const app = express()
 const prisma = new PrismaClient()
 const PORT = process.env.PORT || 4000
 const CLIENT_ORIGIN = process.env.CLIENT_ORIGIN
-const JWT_SECRET = process.env.JWT_SECRET || 'souqna-dev-jwt-secret-change-me'
+const IS_PROD = process.env.NODE_ENV === 'production'
+
+// ─── JWT secret: fail fast in production, allow dev fallback only outside prod ─
+const JWT_SECRET = process.env.JWT_SECRET || (IS_PROD ? null : 'souqna-dev-jwt-secret-change-me')
 const JWT_EXPIRES_IN = process.env.JWT_EXPIRES_IN || '7d'
+
+if (!process.env.JWT_SECRET) {
+  if (IS_PROD) {
+    console.error('FATAL: JWT_SECRET is not set in production. Refusing to start.')
+    process.exit(1)
+  }
+  console.warn('[security] JWT_SECRET is not set. Using an insecure development fallback. DO NOT USE IN PROD.')
+}
+
+if (!process.env.SESSION_SECRET && IS_PROD) {
+  console.error('FATAL: SESSION_SECRET is not set in production. Refusing to start.')
+  process.exit(1)
+}
+
 const authUserInclude = {
   profile: true,
   customer: true,
   vendor: { include: { vendorSummary: true, user: { include: { profile: true } } } },
 }
 
-if (!process.env.JWT_SECRET) {
-  console.warn('JWT_SECRET is not set. Using an insecure development fallback.')
+// ─── Sanitize helper — strips script tags, on* handlers from user-submitted HTML
+// Keeps plain text mostly intact. Apply to any field rendered as HTML or that
+// might be interpolated into the DOM (descriptions, names, messages).
+function sanitizeText(input) {
+  if (input == null) return input
+  return xss(String(input), {
+    whiteList: {},          // no HTML tags allowed
+    stripIgnoreTag: true,
+    stripIgnoreTagBody: ['script', 'style'],
+  })
 }
 
-cloudinary.config({
-  cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
-  api_key: process.env.CLOUDINARY_API_KEY,
-  api_secret: process.env.CLOUDINARY_API_SECRET,
-})
+// UploadThing — reads UPLOADTHING_TOKEN from env automatically
+const utapi = process.env.UPLOADTHING_TOKEN ? new UTApi() : null
 
-app.use(cors({ origin: CLIENT_ORIGIN ? CLIENT_ORIGIN.split(',').map(origin => origin.trim()) : true, credentials: true }))
-app.use(express.json({ limit: '8mb' }))
-app.use(rateLimit({ windowMs: 60_000, limit: 240 }))
+// Upload a base64 data URL (data:image/jpeg;base64,...) to UploadThing.
+async function uploadDataUrl(dataUrl, namePrefix = 'upload') {
+  if (!utapi) throw new Error('Image uploads not configured. Set UPLOADTHING_TOKEN in .env.local')
+  const match = /^data:([^;]+);base64,(.+)$/.exec(String(dataUrl))
+  if (!match) throw new Error('Invalid image data — expected a base64 data URL')
+  const [, mime, base64] = match
+  const buffer = Buffer.from(base64, 'base64')
+  const ext = (mime.split('/')[1] || 'bin').split('+')[0]
+  const file = new UTFile([buffer], `${namePrefix}-${Date.now()}.${ext}`, { type: mime })
+  const result = await utapi.uploadFiles(file)
+  if (result.error) throw new Error(result.error.message || 'Upload failed')
+  return { url: result.data.ufsUrl || result.data.url, key: result.data.key }
+}
+
+// ─── Security headers (helmet) ───────────────────────────────────────────────
+// CSP set to "report only" defaults so it doesn't break dev. Tighten in prod.
+app.use(helmet({
+  contentSecurityPolicy: IS_PROD ? {
+    directives: {
+      defaultSrc: ["'self'"],
+      scriptSrc: ["'self'"],
+      styleSrc: ["'self'", "'unsafe-inline'", 'https://fonts.googleapis.com'],
+      fontSrc: ["'self'", 'https://fonts.gstatic.com', 'data:'],
+      imgSrc: ["'self'", 'data:', 'https://utfs.io', 'https://*.ufs.sh', 'https://*.cloudinary.com'],
+      connectSrc: ["'self'"],
+      frameAncestors: ["'none'"],
+    },
+  } : false,
+  crossOriginEmbedderPolicy: false,
+  hsts: IS_PROD ? { maxAge: 31536000, includeSubDomains: true, preload: true } : false,
+}))
+
+// ─── CORS — strict allow-list in production ─────────────────────────────────
+const corsOrigins = CLIENT_ORIGIN ? CLIENT_ORIGIN.split(',').map(o => o.trim()) : null
+app.use(cors({
+  origin: (origin, cb) => {
+    // Same-origin / mobile apps / curl send no Origin header — allow.
+    if (!origin) return cb(null, true)
+    if (!corsOrigins) {
+      if (IS_PROD) return cb(new Error('CORS not configured (CLIENT_ORIGIN missing)'))
+      return cb(null, true)
+    }
+    if (corsOrigins.includes(origin)) return cb(null, true)
+    return cb(new Error(`Origin ${origin} not allowed by CORS policy`))
+  },
+  credentials: true,
+}))
+
+app.use(express.json({ limit: '2mb' }))
+app.use(cookieParser())
+
+// ─── Global rate limit (broad safety net) + per-route limiters below ────────
+app.use(rateLimit({
+  windowMs: 60_000,
+  limit: IS_PROD ? 120 : 240,
+  standardHeaders: 'draft-7',
+  legacyHeaders: false,
+  message: { message: 'Too many requests, please slow down.' },
+}))
+
+// Stricter limiters for sensitive endpoints
+const authLimiter = rateLimit({
+  windowMs: 60_000, limit: 8,
+  standardHeaders: 'draft-7', legacyHeaders: false,
+  message: { message: 'Too many auth attempts. Please wait a minute.' },
+})
+const orderLimiter = rateLimit({
+  windowMs: 60_000, limit: 20,
+  standardHeaders: 'draft-7', legacyHeaders: false,
+  message: { message: 'Too many orders submitted. Please slow down.' },
+})
+const uploadLimiter = rateLimit({
+  windowMs: 60_000, limit: 30,
+  standardHeaders: 'draft-7', legacyHeaders: false,
+  message: { message: 'Upload rate limit exceeded.' },
+})
 
 // ─── Session (only used during OAuth dance — not for API auth) ────────────────
 app.use(session({
-  secret: process.env.SESSION_SECRET || 'souqna-session-fallback',
+  secret: process.env.SESSION_SECRET || (IS_PROD ? null : 'souqna-session-fallback'),
   resave: false,
   saveUninitialized: false,
-  cookie: { secure: false, maxAge: 10 * 60 * 1000 },
+  cookie: {
+    httpOnly: true,
+    secure: IS_PROD,
+    sameSite: IS_PROD ? 'lax' : 'lax',
+    maxAge: 10 * 60 * 1000,
+  },
 }))
 app.use(passport.initialize())
 app.use(passport.session())
@@ -156,9 +259,9 @@ app.get('/api/auth/google', (req, res, next) => {
 app.get('/api/auth/google/callback', (req, res, next) => {
   passport.authenticate('google', { session: true, failureRedirect: `${FRONTEND}/login?error=google` }, (err, user) => {
     if (err || !user) return res.redirect(`${FRONTEND}/login?error=google`)
-    const token = signAuthToken(user)
+    setAuthCookie(res, user)
     req.logout(() => {})
-    res.redirect(`${FRONTEND}/auth/callback?token=${token}`)
+    res.redirect(`${FRONTEND}/auth/callback`)
   })(req, res, next)
 })
 
@@ -173,9 +276,9 @@ app.get('/api/auth/facebook', (req, res, next) => {
 app.get('/api/auth/facebook/callback', (req, res, next) => {
   passport.authenticate('facebook', { session: true, failureRedirect: `${FRONTEND}/login?error=facebook` }, (err, user) => {
     if (err || !user) return res.redirect(`${FRONTEND}/login?error=facebook`)
-    const token = signAuthToken(user)
+    setAuthCookie(res, user)
     req.logout(() => {})
-    res.redirect(`${FRONTEND}/auth/callback?token=${token}`)
+    res.redirect(`${FRONTEND}/auth/callback`)
   })(req, res, next)
 })
 
@@ -208,9 +311,12 @@ function parseBody(schema, req, res) {
 }
 
 function authRequired(req, res, next) {
+  const cookieToken = req.cookies?.[AUTH_COOKIE]
   const header = req.headers.authorization || ''
-  const [scheme, token] = header.split(' ')
-  if (scheme !== 'Bearer' || !token) {
+  const [scheme, headerToken] = header.split(' ')
+  const token = cookieToken || (scheme === 'Bearer' ? headerToken : null)
+
+  if (!token) {
     return res.status(401).json({ message: 'Please sign in to continue.' })
   }
 
@@ -250,6 +356,15 @@ async function requireAdmin(req, res, next) {
   return next()
 }
 
+async function requireVendor(req, res, next) {
+  const user = await getCurrentUser(req)
+  if (!user) return res.status(401).json({ message: 'Please sign in to continue.' })
+  if (!user.vendor) return res.status(403).json({ message: 'Vendor account required.' })
+  if (user.vendor.status !== 'active') return res.status(403).json({ message: 'Your vendor account is not active.' })
+  req.currentUser = user
+  return next()
+}
+
 function mapProfile(profile) {
   if (!profile) return null
   return {
@@ -283,11 +398,27 @@ function mapAuthUser(user) {
   }
 }
 
-// resend cooldown — in-memory, 60s per email
-const resendCooldowns = new Map()
-
 function signAuthToken(user) {
   return jwt.sign({ userId: user.id, email: user.email }, JWT_SECRET, { expiresIn: JWT_EXPIRES_IN })
+}
+
+const AUTH_COOKIE = 'souqna_token'
+const AUTH_COOKIE_MAX_AGE = 7 * 24 * 60 * 60 * 1000 // 7 days
+
+function setAuthCookie(res, user) {
+  const token = signAuthToken(user)
+  res.cookie(AUTH_COOKIE, token, {
+    httpOnly: true,
+    secure: IS_PROD,
+    sameSite: 'lax',
+    maxAge: AUTH_COOKIE_MAX_AGE,
+    path: '/',
+  })
+  return token
+}
+
+function clearAuthCookie(res) {
+  res.clearCookie(AUTH_COOKIE, { httpOnly: true, secure: IS_PROD, sameSite: 'lax', path: '/' })
 }
 
 function mapVendor(vendor) {
@@ -498,21 +629,13 @@ app.get('/api/health', (_req, res) => {
   res.json({ ok: true })
 })
 
-app.post('/api/upload', authRequired, async (req, res) => {
+app.post('/api/upload', uploadLimiter, authRequired, async (req, res) => {
   const { imageData, folder } = req.body
   if (!imageData) return res.status(400).json({ message: 'No image data provided' })
-  const cloudName = process.env.CLOUDINARY_CLOUD_NAME
-  const apiKey = process.env.CLOUDINARY_API_KEY
-  const apiSecret = process.env.CLOUDINARY_API_SECRET
-  if (!cloudName || !apiKey || !apiSecret) {
-    return res.status(503).json({ message: 'Image uploads not configured. Add CLOUDINARY_* variables to .env.local' })
-  }
-  const result = await cloudinary.uploader.upload(imageData, {
-    folder: folder || 'souqna/products',
-    resource_type: 'auto',
-    transformation: [{ quality: 'auto', fetch_format: 'auto' }],
-  })
-  res.json({ url: result.secure_url, publicId: result.public_id })
+  if (!utapi) return res.status(503).json({ message: 'Image uploads not configured. Set UPLOADTHING_TOKEN in .env.local' })
+  const namePrefix = (folder || 'product').replace(/[^a-z0-9]+/gi, '-').toLowerCase()
+  const { url, key } = await uploadDataUrl(imageData, namePrefix)
+  res.json({ url, publicId: key })
 })
 
 app.get('/api/categories', async (_req, res) => {
@@ -641,7 +764,7 @@ const loginSchema = z.object({
   password: z.string().min(1, 'Password is required'),
 })
 
-app.post('/api/auth/register', wrap(async (req, res) => {
+app.post('/api/auth/register', authLimiter, wrap(async (req, res) => {
   const input = parseBody(registerSchema, req, res)
   if (!input) return
 
@@ -680,7 +803,7 @@ app.post('/api/auth/register', wrap(async (req, res) => {
   }
 }))
 
-app.post('/api/auth/login', wrap(async (req, res) => {
+app.post('/api/auth/login', authLimiter, wrap(async (req, res) => {
   const input = parseBody(loginSchema, req, res)
   if (!input) return
 
@@ -702,7 +825,8 @@ app.post('/api/auth/login', wrap(async (req, res) => {
     })
   }
 
-  res.json({ token: signAuthToken(user), user: mapAuthUser(user) })
+  setAuthCookie(res, user)
+  res.json({ user: mapAuthUser(user) })
 }))
 
 app.get('/api/auth/me', authRequired, wrap(async (req, res) => {
@@ -710,6 +834,11 @@ app.get('/api/auth/me', authRequired, wrap(async (req, res) => {
   if (!user) return
   res.json({ user: mapAuthUser(user) })
 }))
+
+app.post('/api/auth/logout', (req, res) => {
+  clearAuthCookie(res)
+  res.json({ message: 'Signed out successfully.' })
+})
 
 app.get('/api/auth/verify-email', wrap(async (req, res) => {
   const token = String(req.query.token || '')
@@ -733,19 +862,13 @@ app.get('/api/auth/verify-email', wrap(async (req, res) => {
     include: authUserInclude,
   })
 
-  res.json({ message: 'Email verified! Welcome to SouQna.', token: signAuthToken(verified), user: mapAuthUser(verified) })
+  setAuthCookie(res, verified)
+  res.json({ message: 'Email verified! Welcome to SouQna.', user: mapAuthUser(verified) })
 }))
 
-app.post('/api/auth/resend-verification', wrap(async (req, res) => {
+app.post('/api/auth/resend-verification', authLimiter, wrap(async (req, res) => {
   const input = parseBody(z.object({ email: z.string().email() }), req, res)
   if (!input) return
-
-  const now = Date.now()
-  const lastSent = resendCooldowns.get(input.email)
-  if (lastSent && now - lastSent < 60_000) {
-    const wait = Math.ceil((60_000 - (now - lastSent)) / 1000)
-    return res.status(429).json({ message: `Please wait ${wait}s before requesting another email.`, wait })
-  }
 
   const user = await prisma.user.findUnique({ where: { email: input.email }, include: { profile: true } })
   // Always return 200 to not reveal whether an email exists
@@ -753,28 +876,37 @@ app.post('/api/auth/resend-verification', wrap(async (req, res) => {
     return res.json({ message: 'If this email has a pending verification, a new email has been sent.' })
   }
 
+  // DB-based cooldown: block if a token was issued within the last 60s
+  if (user.emailVerificationExpiry) {
+    const issuedAt = user.emailVerificationExpiry.getTime() - 24 * 60 * 60 * 1000
+    const waitMs = 60_000 - (Date.now() - issuedAt)
+    if (waitMs > 0) {
+      const wait = Math.ceil(waitMs / 1000)
+      return res.status(429).json({ message: `Please wait ${wait}s before requesting another email.`, wait })
+    }
+  }
+
   const token = crypto.randomBytes(32).toString('hex')
   await prisma.user.update({
     where: { id: user.id },
     data: { emailVerificationToken: token, emailVerificationExpiry: new Date(Date.now() + 24 * 60 * 60 * 1000) },
   })
-  resendCooldowns.set(input.email, now)
   sendVerificationEmail(input.email, user.profile?.fullName || '', token).catch(console.error)
 
   res.json({ message: 'Verification email sent. Please check your inbox.' })
 }))
 
+// Vendor-controllable fields ONLY. `approvalStatus`, `featured`, and `'deleted'`
+// status are admin-only — never accept from vendor input.
 const productInputSchema = z.object({
-  name: z.string().min(2),
-  description: z.string().optional().nullable(),
-  price: z.coerce.number().nonnegative(),
-  category: z.string().optional().nullable(),
+  name: z.string().min(2).max(200),
+  description: z.string().max(5000).optional().nullable(),
+  price: z.coerce.number().nonnegative().max(1_000_000),
+  category: z.string().max(100).optional().nullable(),
   categoryId: z.string().optional().nullable(),
-  stock: z.coerce.number().int().nonnegative().optional(),
+  stock: z.coerce.number().int().nonnegative().max(1_000_000).optional(),
   imageUrl: z.string().url().optional().nullable(),
-  status: z.enum(['draft', 'active', 'inactive', 'deleted']).optional(),
-  approvalStatus: z.enum(['pending', 'approved', 'rejected']).optional(),
-  featured: z.boolean().optional(),
+  status: z.enum(['draft', 'active', 'inactive']).optional(),
 })
 
 const vendorSetupSchema = z.object({
@@ -873,15 +1005,15 @@ app.post('/api/vendor/products', authRequired, async (req, res) => {
     data: {
       vendorId: vendor.id,
       categoryId: category?.id || null,
-      name: input.name,
+      name: sanitizeText(input.name),
       slug: await uniqueProductSlug(input.name),
-      description: input.description || null,
-      shortDescription: input.description || null,
+      description: input.description ? sanitizeText(input.description) : null,
+      shortDescription: input.description ? sanitizeText(input.description) : null,
       price: input.price,
       stock: input.stock ?? 0,
-      status: input.status || 'active',
-      approvalStatus: input.approvalStatus || 'approved',
-      featured: input.featured || false,
+      status: input.status || 'draft',
+      approvalStatus: 'pending',
+      featured: false,
       productImages: input.imageUrl ? { create: { imageUrl: input.imageUrl, isPrimary: true } } : undefined,
     },
     include: { productImages: true, productVariants: true, vendor: true, category: true },
@@ -912,13 +1044,11 @@ app.put('/api/vendor/products/:id', authRequired, async (req, res) => {
   const product = await prisma.product.update({
     where: { id: existing.id },
     data: {
-      ...(input.name ? { name: input.name, slug: await uniqueProductSlug(input.name, existing.id) } : {}),
-      ...(input.description !== undefined ? { description: input.description, shortDescription: input.description } : {}),
+      ...(input.name ? { name: sanitizeText(input.name), slug: await uniqueProductSlug(input.name, existing.id) } : {}),
+      ...(input.description !== undefined ? { description: input.description ? sanitizeText(input.description) : null, shortDescription: input.description ? sanitizeText(input.description) : null } : {}),
       ...(input.price !== undefined ? { price: input.price } : {}),
       ...(input.stock !== undefined ? { stock: input.stock } : {}),
       ...(input.status ? { status: input.status } : {}),
-      ...(input.approvalStatus ? { approvalStatus: input.approvalStatus } : {}),
-      ...(input.featured !== undefined ? { featured: input.featured } : {}),
       ...(category !== undefined ? { categoryId: category?.id || null } : {}),
     },
     include: { productImages: true, productVariants: true, vendor: true, category: true },
@@ -938,63 +1068,131 @@ app.delete('/api/vendor/products/:id', authRequired, async (req, res) => {
 })
 
 const orderSchema = z.object({
-  customerId: z.string().optional(),
   cartItems: z.array(z.object({
     product_id: z.string(),
     variant_id: z.string().nullable().optional(),
-    quantity: z.coerce.number().int().positive(),
-    product: z.object({
-      id: z.string().optional(),
-      price: z.coerce.number(),
-      name: z.string(),
-      primary_image: z.string().nullable().optional(),
-      vendor: z.object({ id: z.string() }),
-    }),
-  })).min(1),
-  shippingInfo: z.record(z.string(), z.any()).optional(),
+    quantity: z.coerce.number().int().positive().max(100),
+  })).min(1).max(50),
+  shippingInfo: z.object({
+    shipping_name: z.string().trim().min(1).max(200),
+    shipping_address: z.string().trim().min(1).max(500),
+    shipping_city: z.string().trim().min(1).max(100),
+    shipping_phone: z.string().trim().min(1).max(50),
+    customer_note: z.string().max(1000).nullable().optional(),
+    payment_method: z.literal('cash_delivery'),
+  }),
 })
 
-app.post('/api/orders', authRequired, async (req, res) => {
+const SHIPPING_COST_USD = 3.5
+
+app.post('/api/orders', orderLimiter, authRequired, async (req, res) => {
   const input = parseBody(orderSchema, req, res)
   if (!input) return
   const user = await getAuthedUser(req, res)
   if (!user) return
   const customer = user.customer || await prisma.customer.create({ data: { userId: user.id } })
-  const subtotal = input.cartItems.reduce((sum, item) => sum + item.product.price * item.quantity, 0)
-  const tax = Number(input.shippingInfo?.tax || 0)
-  const shippingCost = Number(input.shippingInfo?.shipping_cost || 0)
+
+  // ─── Fetch products + variants from DB (server is the source of truth) ───
+  const productIds = [...new Set(input.cartItems.map(i => i.product_id))]
+  const variantIds = input.cartItems.map(i => i.variant_id).filter(Boolean)
+
+  const [products, variants] = await Promise.all([
+    prisma.product.findMany({
+      where: { id: { in: productIds }, status: 'active', approvalStatus: 'approved' },
+      include: { productImages: { where: { isPrimary: true }, take: 1 }, vendor: { include: { user: true } } },
+    }),
+    variantIds.length
+      ? prisma.productVariant.findMany({ where: { id: { in: variantIds } } })
+      : Promise.resolve([]),
+  ])
+
+  const productMap = new Map(products.map(p => [p.id, p]))
+  const variantMap = new Map(variants.map(v => [v.id, v]))
+
+  // ─── Validate availability ───
+  for (const item of input.cartItems) {
+    const product = productMap.get(item.product_id)
+    if (!product) {
+      return res.status(400).json({ message: 'One of the products is no longer available.' })
+    }
+    if (item.variant_id) {
+      const variant = variantMap.get(item.variant_id)
+      if (!variant || variant.productId !== product.id) {
+        return res.status(400).json({ message: `Invalid variant for ${product.name}.` })
+      }
+    }
+  }
+
+  // ─── Build order items using DB prices (NEVER trust client) ───
+  const orderItemsData = input.cartItems.map(item => {
+    const product = productMap.get(item.product_id)
+    const variant = item.variant_id ? variantMap.get(item.variant_id) : null
+    const unitPrice = product.price + (variant?.priceAdjustment || 0)
+    return {
+      productId: product.id,
+      vendorId: product.vendorId,
+      variantId: variant?.id || null,
+      quantity: item.quantity,
+      unitPrice,
+      totalPrice: unitPrice * item.quantity,
+      productName: product.name,
+      productImage: product.productImages[0]?.imageUrl || null,
+      variantInfo: variant ? `${variant.optionName}: ${variant.optionValue}` : null,
+    }
+  })
+
+  const subtotal = orderItemsData.reduce((s, i) => s + i.totalPrice, 0)
+  const tax = 0
+  const shippingCost = SHIPPING_COST_USD
   const total = subtotal + tax + shippingCost
 
-  const order = await prisma.order.create({
-    data: {
-      customerId: customer.id,
-      orderNumber: `ORD-${Date.now()}`,
-      subtotal,
-      tax,
-      shippingCost,
-      total,
-      shippingName: input.shippingInfo?.shipping_name || null,
-      shippingAddress: input.shippingInfo?.shipping_address || null,
-      shippingCity: input.shippingInfo?.shipping_city || null,
-      shippingCountry: input.shippingInfo?.shipping_country || null,
-      shippingPhone: input.shippingInfo?.shipping_phone || null,
-      paymentMethod: input.shippingInfo?.payment_method || null,
-      customerNote: input.shippingInfo?.customer_note || null,
-      orderItems: {
-        create: input.cartItems.map(item => ({
-          productId: item.product_id,
-          vendorId: item.product.vendor.id,
-          variantId: item.variant_id || null,
-          quantity: item.quantity,
-          unitPrice: item.product.price,
-          totalPrice: item.product.price * item.quantity,
-          productName: item.product.name,
-          productImage: item.product.primary_image || null,
-        })),
-      },
-    },
-    include: { orderItems: { include: { vendor: { include: { user: true } } } } },
-  })
+  // ─── Atomic: decrement stock + create order in one transaction ───
+  let order
+  try {
+    order = await prisma.$transaction(async (tx) => {
+      for (const item of input.cartItems) {
+        const product = productMap.get(item.product_id)
+        const decrementResult = item.variant_id
+          ? await tx.productVariant.updateMany({
+              where: { id: item.variant_id, stock: { gte: item.quantity } },
+              data: { stock: { decrement: item.quantity } },
+            })
+          : await tx.product.updateMany({
+              where: { id: item.product_id, stock: { gte: item.quantity } },
+              data: { stock: { decrement: item.quantity } },
+            })
+        if (decrementResult.count === 0) {
+          const err = new Error(`Out of stock: ${product.name}`)
+          err.code = 'OUT_OF_STOCK'
+          throw err
+        }
+      }
+
+      return tx.order.create({
+        data: {
+          customerId: customer.id,
+          orderNumber: `ORD-${Date.now()}-${Math.random().toString(36).slice(2, 8).toUpperCase()}`,
+          subtotal,
+          tax,
+          shippingCost,
+          total,
+          shippingName: input.shippingInfo.shipping_name,
+          shippingAddress: input.shippingInfo.shipping_address,
+          shippingCity: input.shippingInfo.shipping_city,
+          shippingPhone: input.shippingInfo.shipping_phone,
+          paymentMethod: input.shippingInfo.payment_method,
+          customerNote: input.shippingInfo.customer_note || null,
+          orderItems: { create: orderItemsData },
+        },
+        include: { orderItems: { include: { vendor: { include: { user: true } } } } },
+      })
+    })
+  } catch (err) {
+    if (err.code === 'OUT_OF_STOCK') {
+      return res.status(409).json({ message: err.message })
+    }
+    throw err
+  }
 
   // Fire emails — never block the response
   ;(async () => {
@@ -1579,7 +1777,7 @@ app.patch('/api/admin/subscriptions/:id', authRequired, requireAdmin, async (req
 // ─── VENDOR: Subscription ───────────────────────────────────────────────────
 const SUBSCRIPTION_PRICES = { monthly: 15, annual: 120 }
 
-app.post('/api/subscriptions', authRequired, async (req, res) => {
+app.post('/api/subscriptions', uploadLimiter, authRequired, async (req, res) => {
   const input = parseBody(z.object({
     plan: z.enum(['monthly', 'annual']),
     paymentMethod: z.enum(['wish_money', 'omt', 'cash_delivery', 'credit_card']),
@@ -1593,8 +1791,8 @@ app.post('/api/subscriptions', authRequired, async (req, res) => {
   const amount = SUBSCRIPTION_PRICES[input.plan]
   let proofUrl = input.paymentProof || null
   if (proofUrl && proofUrl.startsWith('data:')) {
-    const result = await cloudinary.uploader.upload(proofUrl, { folder: 'souqna/payment-proofs', resource_type: 'auto' })
-    proofUrl = result.secure_url
+    const uploaded = await uploadDataUrl(proofUrl, 'payment-proof')
+    proofUrl = uploaded.url
   }
   const sub = await prisma.vendorSubscription.create({
     data: {
@@ -1647,60 +1845,52 @@ app.patch('/api/vendor/profile', authRequired, async (req, res) => {
   const vendor = await prisma.vendor.update({
     where: { id: user.vendor.id },
     data: {
-      ...(input.storeName ? { storeName: input.storeName } : {}),
-      ...(input.description !== undefined ? { description: input.description } : {}),
-      ...(input.mission !== undefined ? { mission: input.mission } : {}),
-      ...(input.location !== undefined ? { location: input.location } : {}),
-      ...(input.address !== undefined ? { address: input.address } : {}),
-      ...(input.phone !== undefined ? { phone: input.phone } : {}),
+      ...(input.storeName ? { storeName: sanitizeText(input.storeName) } : {}),
+      ...(input.description !== undefined ? { description: input.description ? sanitizeText(input.description) : null } : {}),
+      ...(input.mission !== undefined ? { mission: input.mission ? sanitizeText(input.mission) : null } : {}),
+      ...(input.location !== undefined ? { location: input.location ? sanitizeText(input.location) : null } : {}),
+      ...(input.address !== undefined ? { address: input.address ? sanitizeText(input.address) : null } : {}),
+      ...(input.phone !== undefined ? { phone: input.phone ? sanitizeText(input.phone) : null } : {}),
       ...(input.website !== undefined ? { website: input.website || null } : {}),
-      ...(input.whatsapp !== undefined ? { whatsapp: input.whatsapp } : {}),
-      ...(input.instagram !== undefined ? { instagram: input.instagram } : {}),
-      ...(input.facebook !== undefined ? { facebook: input.facebook } : {}),
-      ...(input.tiktok !== undefined ? { tiktok: input.tiktok } : {}),
-      ...(input.youtube !== undefined ? { youtube: input.youtube } : {}),
+      ...(input.whatsapp !== undefined ? { whatsapp: input.whatsapp ? sanitizeText(input.whatsapp) : null } : {}),
+      ...(input.instagram !== undefined ? { instagram: input.instagram ? sanitizeText(input.instagram) : null } : {}),
+      ...(input.facebook !== undefined ? { facebook: input.facebook ? sanitizeText(input.facebook) : null } : {}),
+      ...(input.tiktok !== undefined ? { tiktok: input.tiktok ? sanitizeText(input.tiktok) : null } : {}),
+      ...(input.youtube !== undefined ? { youtube: input.youtube ? sanitizeText(input.youtube) : null } : {}),
     },
     include: { vendorSummary: true, socialLinks: true, user: { include: { profile: true } } },
   })
   res.json({ data: mapVendor(vendor) })
 })
 
-app.post('/api/vendor/cover', authRequired, async (req, res) => {
+app.post('/api/vendor/cover', uploadLimiter, authRequired, async (req, res) => {
   const { imageData } = req.body
   if (!imageData) return res.status(400).json({ message: 'No image data' })
   const user = await getAuthedUser(req, res)
   if (!user) return
   if (!user.vendor) return res.status(403).json({ message: 'Not a vendor' })
-  const result = await cloudinary.uploader.upload(imageData, {
-    folder: 'souqna/covers',
-    resource_type: 'auto',
-    transformation: [{ width: 1400, height: 400, crop: 'fill', quality: 'auto', fetch_format: 'auto' }],
-  })
+  const { url, key } = await uploadDataUrl(imageData, 'vendor-cover')
   const vendor = await prisma.vendor.update({
     where: { id: user.vendor.id },
-    data: { coverUrl: result.secure_url, coverPublicId: result.public_id },
+    data: { coverUrl: url, coverPublicId: key },
     include: { vendorSummary: true, socialLinks: true, user: { include: { profile: true } } },
   })
-  res.json({ data: mapVendor(vendor), url: result.secure_url })
+  res.json({ data: mapVendor(vendor), url })
 })
 
-app.post('/api/vendor/logo', authRequired, async (req, res) => {
+app.post('/api/vendor/logo', uploadLimiter, authRequired, async (req, res) => {
   const { imageData } = req.body
   if (!imageData) return res.status(400).json({ message: 'No image data' })
   const user = await getAuthedUser(req, res)
   if (!user) return
   if (!user.vendor) return res.status(403).json({ message: 'Not a vendor' })
-  const result = await cloudinary.uploader.upload(imageData, {
-    folder: 'souqna/logos',
-    resource_type: 'auto',
-    transformation: [{ width: 300, height: 300, crop: 'fill', quality: 'auto', fetch_format: 'auto' }],
-  })
+  const { url, key } = await uploadDataUrl(imageData, 'vendor-logo')
   const vendor = await prisma.vendor.update({
     where: { id: user.vendor.id },
-    data: { logoUrl: result.secure_url, logoPublicId: result.public_id },
+    data: { logoUrl: url, logoPublicId: key },
     include: { vendorSummary: true, socialLinks: true, user: { include: { profile: true } } },
   })
-  res.json({ data: mapVendor(vendor), url: result.secure_url })
+  res.json({ data: mapVendor(vendor), url })
 })
 
 // ─── ADMIN: Patch Users Role ─────────────────────────────────────────────────

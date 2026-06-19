@@ -1,6 +1,6 @@
 import { useEffect } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
-import { AUTH_TOKEN_KEY, apiFetch } from '../lib/api'
+import { apiFetch } from '../lib/api'
 import { useAuthStore } from '../store/authStore'
 import type { AuthUser } from '../types/database.types'
 
@@ -10,16 +10,14 @@ function AuthCallbackPage() {
   const setUser = useAuthStore(s => s.setUser)
 
   useEffect(() => {
-    const token = params.get('token')
     const error = params.get('error')
 
-    if (error || !token) {
+    if (error) {
       navigate('/login?error=google', { replace: true })
       return
     }
 
-    localStorage.setItem(AUTH_TOKEN_KEY, token)
-
+    // Cookie was set server-side — just fetch the user profile
     apiFetch<{ user: AuthUser }>('/api/auth/me')
       .then(({ user }) => {
         setUser(user)
@@ -28,7 +26,6 @@ function AuthCallbackPage() {
         else navigate('/', { replace: true })
       })
       .catch(() => {
-        localStorage.removeItem(AUTH_TOKEN_KEY)
         navigate('/login?error=google', { replace: true })
       })
   }, []) // eslint-disable-line react-hooks/exhaustive-deps

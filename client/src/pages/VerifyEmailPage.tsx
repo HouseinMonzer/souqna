@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
-import { AUTH_TOKEN_KEY, apiFetch } from '../lib/api'
+import { apiFetch } from '../lib/api'
 import { useAuthStore } from '../store/authStore'
 import type { AuthUser } from '../types/database.types'
 
@@ -32,9 +32,8 @@ function VerifyEmailPage() {
       return
     }
 
-    apiFetch<{ token: string; user: AuthUser }>(`/api/auth/verify-email?token=${encodeURIComponent(token)}`)
-      .then(({ token: jwt, user }) => {
-        localStorage.setItem(AUTH_TOKEN_KEY, jwt)
+    apiFetch<{ user: AuthUser }>(`/api/auth/verify-email?token=${encodeURIComponent(token)}`)
+      .then(({ user }) => {
         setUser(user)
         setState('success')
         // Auto-redirect after 2s

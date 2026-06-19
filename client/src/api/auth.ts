@@ -1,32 +1,25 @@
-import { AUTH_TOKEN_KEY, apiFetch } from '../lib/api'
+import { apiFetch } from '../lib/api'
 import type { AuthUser, Profile, ProfileUpdate, UserRole } from '../types/database.types'
-
-interface AuthResponse {
-  token: string
-  user: AuthUser
-}
 
 export const authService = {
   async signUp(email: string, password: string, fullName: string) {
-    const response = await apiFetch<AuthResponse>('/api/auth/register', {
+    const response = await apiFetch<{ user: AuthUser }>('/api/auth/register', {
       method: 'POST',
       body: JSON.stringify({ email, password, name: fullName }),
     })
-    localStorage.setItem(AUTH_TOKEN_KEY, response.token)
     return response.user
   },
 
   async signIn(email: string, password: string) {
-    const response = await apiFetch<AuthResponse>('/api/auth/login', {
+    const response = await apiFetch<{ user: AuthUser }>('/api/auth/login', {
       method: 'POST',
       body: JSON.stringify({ email, password }),
     })
-    localStorage.setItem(AUTH_TOKEN_KEY, response.token)
     return response.user
   },
 
   async signOut() {
-    localStorage.removeItem(AUTH_TOKEN_KEY)
+    await apiFetch('/api/auth/logout', { method: 'POST' }).catch(() => {})
     return null
   },
 
