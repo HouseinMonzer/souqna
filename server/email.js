@@ -3,6 +3,10 @@ const nodemailer = require('nodemailer')
 const CLIENT_URL = process.env.CLIENT_URL || 'http://localhost:5173'
 const EMAIL_FROM = process.env.EMAIL_FROM || '"SouQna" <noreply@souqna.com>'
 
+const HTML_ESCAPES = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }
+// Every user-supplied value interpolated into an email must go through esc().
+const esc = value => String(value ?? '').replace(/[&<>"']/g, ch => HTML_ESCAPES[ch])
+
 let _transporter = null
 
 async function getTransporter() {
@@ -92,7 +96,7 @@ function sendVerificationEmail(to, name, token) {
 
   const body = `
     <h2 style="margin:0 0 8px;color:#1A2E0E;font-family:Georgia,serif;">Verify your email address</h2>
-    <p style="margin:0 0 20px;color:#4a5a3e;font-size:15px;">Hi ${firstName},</p>
+    <p style="margin:0 0 20px;color:#4a5a3e;font-size:15px;">Hi ${esc(firstName)},</p>
     <p style="margin:0 0 20px;color:#4a5a3e;font-size:15px;">
       Thanks for joining SouQna! Click the button below to verify your email address and activate your account.
     </p>
@@ -110,8 +114,8 @@ function sendVerificationEmail(to, name, token) {
 function sendOrderConfirmation(to, { orderNumber, items, subtotal, shippingCost, total, shippingName, shippingAddress, shippingCity }) {
   const itemRows = items.map(i => `
     <tr>
-      <td style="padding:8px 0;border-bottom:1px solid #f0ece4;font-size:14px;color:#1A2E0E;">${i.productName} ${i.variantInfo ? `<span style="color:#888;">(${i.variantInfo})</span>` : ''}</td>
-      <td style="padding:8px 0;border-bottom:1px solid #f0ece4;font-size:14px;color:#888;text-align:center;">x${i.quantity}</td>
+      <td style="padding:8px 0;border-bottom:1px solid #f0ece4;font-size:14px;color:#1A2E0E;">${esc(i.productName)} ${i.variantInfo ? `<span style="color:#888;">(${esc(i.variantInfo)})</span>` : ''}</td>
+      <td style="padding:8px 0;border-bottom:1px solid #f0ece4;font-size:14px;color:#888;text-align:center;">x${Number(i.quantity)}</td>
       <td style="padding:8px 0;border-bottom:1px solid #f0ece4;font-size:14px;color:#1A2E0E;text-align:right;">$${(i.unitPrice * i.quantity).toFixed(2)}</td>
     </tr>
   `).join('')
@@ -146,9 +150,9 @@ function sendOrderConfirmation(to, { orderNumber, items, subtotal, shippingCost,
 
     <h3 style="margin:0 0 10px;color:#1A2E0E;font-size:15px;">Delivery address</h3>
     <p style="margin:0;font-size:14px;color:#4a5a3e;line-height:1.7;">
-      ${shippingName}<br>
-      ${shippingAddress || ''}<br>
-      ${shippingCity || ''}
+      ${esc(shippingName)}<br>
+      ${esc(shippingAddress)}<br>
+      ${esc(shippingCity)}
     </p>
 
     ${divider()}
@@ -162,20 +166,20 @@ function sendOrderConfirmation(to, { orderNumber, items, subtotal, shippingCost,
 function sendVendorNewOrderAlert(to, { storeName, orderNumber, buyerFirstName, items, total, shippingAddress, shippingCity, dashboardUrl }) {
   const itemRows = items.map(i => `
     <tr>
-      <td style="padding:8px 0;border-bottom:1px solid #f0ece4;font-size:14px;color:#1A2E0E;">${i.productName}</td>
-      <td style="padding:8px 0;border-bottom:1px solid #f0ece4;font-size:14px;color:#888;text-align:center;">x${i.quantity}</td>
+      <td style="padding:8px 0;border-bottom:1px solid #f0ece4;font-size:14px;color:#1A2E0E;">${esc(i.productName)}</td>
+      <td style="padding:8px 0;border-bottom:1px solid #f0ece4;font-size:14px;color:#888;text-align:center;">x${Number(i.quantity)}</td>
       <td style="padding:8px 0;border-bottom:1px solid #f0ece4;font-size:14px;color:#1A2E0E;text-align:right;">$${(i.unitPrice * i.quantity).toFixed(2)}</td>
     </tr>
   `).join('')
 
   const body = `
     <h2 style="margin:0 0 8px;color:#1A2E0E;font-family:Georgia,serif;">New order received!</h2>
-    <p style="margin:0 0 20px;color:#4a5a3e;font-size:15px;">Hi <strong>${storeName}</strong>, you have a new order waiting for your approval.</p>
+    <p style="margin:0 0 20px;color:#4a5a3e;font-size:15px;">Hi <strong>${esc(storeName)}</strong>, you have a new order waiting for your approval.</p>
 
     <div style="background:#f7faf3;border:1px solid #d4e8b0;border-radius:8px;padding:16px 20px;margin-bottom:24px;">
       <p style="margin:0;font-size:13px;color:#5C8A2E;font-weight:700;">ORDER NUMBER</p>
       <p style="margin:4px 0 0;font-size:22px;font-weight:700;color:#1A2E0E;font-family:Georgia,serif;">${orderNumber}</p>
-      <p style="margin:6px 0 0;font-size:13px;color:#888;">Buyer: <strong>${buyerFirstName}</strong></p>
+      <p style="margin:6px 0 0;font-size:13px;color:#888;">Buyer: <strong>${esc(buyerFirstName)}</strong></p>
     </div>
 
     <h3 style="margin:0 0 12px;color:#1A2E0E;font-size:15px;">Items to fulfill</h3>
@@ -189,7 +193,7 @@ function sendVendorNewOrderAlert(to, { storeName, orderNumber, buyerFirstName, i
 
     ${divider()}
 
-    <p style="margin:0 0 8px;font-size:14px;color:#4a5a3e;"><strong>Deliver to:</strong> ${shippingAddress || ''}, ${shippingCity || ''}</p>
+    <p style="margin:0 0 8px;font-size:14px;color:#4a5a3e;"><strong>Deliver to:</strong> ${esc(shippingAddress)}, ${esc(shippingCity)}</p>
 
     ${divider()}
     <p style="margin:0 0 16px;font-size:15px;color:#4a5a3e;">Please review and approve or reject this order from your vendor dashboard.</p>
@@ -209,12 +213,12 @@ function sendOrderStatusUpdate(to, { orderNumber, storeName, newStatus, items, t
     cancelled:  'cancelled your order',
   }[newStatus] || `updated your order status to ${newStatus}`
 
-  const itemList = items.map(i => `<li style="margin-bottom:4px;font-size:14px;color:#4a5a3e;">${i.productName} × ${i.quantity}</li>`).join('')
+  const itemList = items.map(i => `<li style="margin-bottom:4px;font-size:14px;color:#4a5a3e;">${esc(i.productName)} × ${i.quantity}</li>`).join('')
 
   const body = `
     <h2 style="margin:0 0 8px;color:#1A2E0E;font-family:Georgia,serif;">Order update</h2>
     <p style="margin:0 0 20px;color:#4a5a3e;font-size:15px;">
-      <strong>${storeName}</strong> ${statusLabel}.
+      <strong>${esc(storeName)}</strong> ${statusLabel}.
     </p>
 
     <div style="background:#f7faf3;border:1px solid #d4e8b0;border-radius:8px;padding:16px 20px;margin-bottom:24px;">
@@ -224,7 +228,7 @@ function sendOrderStatusUpdate(to, { orderNumber, storeName, newStatus, items, t
 
     <ul style="margin:0 0 20px;padding-left:20px;">${itemList}</ul>
 
-    ${trackingNumber ? `<p style="margin:0 0 20px;font-size:14px;color:#4a5a3e;"><strong>Tracking #:</strong> ${trackingNumber}</p>` : ''}
+    ${trackingNumber ? `<p style="margin:0 0 20px;font-size:14px;color:#4a5a3e;"><strong>Tracking #:</strong> ${esc(trackingNumber)}</p>` : ''}
 
     ${divider()}
     <p style="text-align:center;">${btn(`${CLIENT_URL}/dashboard`, 'Track Your Order')}</p>
