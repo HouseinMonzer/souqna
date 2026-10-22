@@ -6,13 +6,15 @@
     "prisma:generate": "prisma generate",
     "prisma:migrate": "prisma migrate dev",
     "check:no-supabase": "node scripts/check-no-supabase.js",
-    "postinstall": "prisma generate"
+    "postinstall": "prisma generate",
+    "test": "node --test --test-concurrency=1 \"server/test/**/*.test.js\"",
+    "test:db": "./scripts/test-db.sh start",
+    "seed:demo": "node scripts/seed-demo-accounts.js"
   },
   "engines": {
     "node": ">=20"
   },
   "dependencies": {
-    "@clerk/express": "^1.7.48",
     "@prisma/client": "^6.19.0",
     "bcrypt": "^6.0.0",
     "cookie-parser": "^1.4.7",
@@ -23,7 +25,7 @@
     "express-session": "^1.19.0",
     "helmet": "^8.2.0",
     "jsonwebtoken": "^9.0.3",
-    "nodemailer": "^8.0.9",
+    "nodemailer": "^10.2.0",
     "passport": "^0.7.0",
     "passport-facebook": "^3.0.0",
     "passport-google-oauth20": "^2.0.0",
@@ -31,5 +33,11 @@
     "uploadthing": "^7.7.4",
     "xss": "^1.0.15",
     "zod": "^4.4.1"
+  },
+  "devDependencies": {
+    "supertest": "^7.3.1"
+  },
+  "overrides": {
+    "effect": "^3.20.0"
   }
 }

@@ -70,7 +70,7 @@ function App() {
     <BrowserRouter>
       <Suspense fallback={<RouteSpinner />}>
         <Routes>
-          {/* RequireAuth redirects unauthenticated users here; /login hosts the real Clerk <SignIn/>. */}
+          {/* RequireAuth redirects unauthenticated users here. */}
           <Route path="/sign-in" element={<Navigate to="/login" replace />} />
           <Route path="/login/*" element={<AuthLayout><LoginPage /></AuthLayout>} />
           <Route path="/register/*" element={<AuthLayout><RegisterPage /></AuthLayout>} />

@@ -10,12 +10,11 @@ function slugify(value) {
     .replace(/^-+|-+$/g, '')
 }
 
-async function upsertVendor({ email, clerkId, storeName, category, location, description, rating, totalSales, productsCount }) {
+async function upsertVendor({ email, storeName, category, location, description, rating, totalSales, productsCount }) {
   const user = await prisma.user.upsert({
-    where: { clerkId },
+    where: { email },
     update: { email },
     create: {
-      clerkId,
       email,
       profile: {
         create: {
@@ -94,7 +93,6 @@ async function main() {
 
   const zaatar = await upsertVendor({
     email: 'zaatar@souqna.local',
-    clerkId: 'seed_vendor_zaatar',
     storeName: 'Zaatar & More',
     category: 'Food & Beverage',
     location: 'Beirut, Lebanon',
@@ -106,7 +104,6 @@ async function main() {
 
   const dragon = await upsertVendor({
     email: 'dragon@souqna.local',
-    clerkId: 'seed_vendor_dragon',
     storeName: 'Dragon Crafts',
     category: 'Crafts & Gifts',
     location: 'Shanghai, China',
