@@ -44,7 +44,13 @@ function LoginPage() {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [showPassword, setShowPassword] = useState(false)
-  const [error, setError] = useState(searchParams.get('error') === 'google' ? (isRTL ? 'فشل تسجيل الدخول عبر Google. حاول مجدداً.' : 'Google sign-in failed. Please try again.') : '')
+  const oauthError = searchParams.get('error')
+  const [error, setError] = useState(
+    oauthError === 'google' ? t('auth.googleFailed')
+      : oauthError === 'facebook' ? t('auth.facebookFailed')
+        : oauthError === 'account_exists' ? t('auth.oauthAccountExists')
+          : '',
+  )
   const [submitting, setSubmitting] = useState(false)
   const [needsVerification, setNeedsVerification] = useState(false)
   const [resending, setResending] = useState(false)

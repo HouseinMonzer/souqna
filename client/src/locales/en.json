@@ -142,6 +142,9 @@
     "noAccount": "Don't have an account?",
     "haveAccount": "Already have an account?",
     "signUp": "Sign up",
-    "signIn": "Sign in"
+    "signIn": "Sign in",
+    "googleFailed": "Google sign-in failed. Please try again.",
+    "facebookFailed": "Facebook sign-in failed. Please try again.",
+    "oauthAccountExists": "An account with this email already exists. Sign in with your password, then link your social account."
   }
 }

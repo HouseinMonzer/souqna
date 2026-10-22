@@ -19,3 +19,14 @@ export function getDiscountPercent(price: number, comparePrice: number): number 
 export function truncate(text: string, length: number): string {
   return text.length > length ? text.slice(0, length) + '...' : text
 }
+// Returns the URL only if it uses http(s); blocks javascript:, data: and other
+// schemes that would execute when rendered as an <a href>.
+export function safeExternalUrl(value: string | null | undefined): string | null {
+  if (!value) return null
+  try {
+    const url = new URL(value)
+    return url.protocol === 'http:' || url.protocol === 'https:' ? url.href : null
+  } catch {
+    return null
+  }
+}

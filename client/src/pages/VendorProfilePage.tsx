@@ -7,6 +7,7 @@ import { useCartStore } from '../store/cartStore'
 import { Stars, ProductCardSkeleton, EmptyState } from '../components/ui'
 import { useIsMobile } from '../hooks/useMediaQuery'
 import { PlatformIcon } from '../components/icons/SocialIcons'
+import { safeExternalUrl } from '../lib/utils'
 import type { Vendor, Product, Category } from '../types/database.types'
 
 
@@ -135,13 +136,13 @@ function VendorProfilePage() {
     vendor.facebook && { platform: 'facebook', href: vendor.facebook.startsWith('http') ? vendor.facebook : `https://facebook.com/${vendor.facebook}`, label: 'Facebook' },
     vendor.tiktok && { platform: 'tiktok', href: vendor.tiktok.startsWith('http') ? vendor.tiktok : `https://tiktok.com/@${vendor.tiktok}`, label: 'TikTok' },
     vendor.youtube && { platform: 'youtube', href: vendor.youtube.startsWith('http') ? vendor.youtube : `https://youtube.com/${vendor.youtube}`, label: 'YouTube' },
-  ].filter(Boolean) as { platform: string; href: string; label: string }[]
+  ].filter((link): link is { platform: string; href: string; label: string } => Boolean(link && safeExternalUrl(link.href)))
 
-  const vendorSocialLinks = (vendor.social_links || []).map(sl => ({
-    platform: sl.platform.toLowerCase(),
-    href: sl.url,
-    label: sl.platform,
-  }))
+  const vendorSocialLinks = (vendor.social_links || []).flatMap(sl => {
+    const href = safeExternalUrl(sl.url)
+    return href ? [{ platform: sl.platform.toLowerCase(), href, label: sl.platform }] : []
+  })
+  const websiteUrl = safeExternalUrl(vendor.website)
 
   const allSocialLinks = [...socialLinks, ...vendorSocialLinks]
 
@@ -220,8 +221,8 @@ function VendorProfilePage() {
                   WhatsApp
                 </a>
               )}
-              {vendor.website && (
-                <a href={vendor.website} target="_blank" rel="noopener noreferrer" style={{ color: '#5C8A2E', fontWeight: '600', textDecoration: 'none' }}>
+              {websiteUrl && (
+                <a href={websiteUrl} target="_blank" rel="noopener noreferrer" style={{ color: '#5C8A2E', fontWeight: '600', textDecoration: 'none' }}>
                   🌐 Website
                 </a>
               )}
