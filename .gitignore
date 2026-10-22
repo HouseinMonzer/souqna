@@ -1,15 +1,17 @@
 node_modules
-# Keep environment variables out of version control
+
+# Environment variables — never commit real values
 .env
-.env.local
-client/.env.local
+.env.*
+!.env.example
+client/.env*
+!client/.env.example
 
 /generated/prisma
 client/dist
 
-# Local debug logs
-server-debug.log
-server.log
+# Logs
+*.log
 server-output.txt
 
 # Claude Code local settings
