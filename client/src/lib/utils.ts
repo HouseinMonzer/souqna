@@ -30,3 +30,9 @@ export function safeExternalUrl(value: string | null | undefined): string | null
     return null
   }
 }
+
+// The app always sets `dir` on <html> (and the showcase on subtrees), so the
+// nearest attribute is the reliable source for keyboard and swipe direction.
+export function isRtlElement(element: Element): boolean {
+  return element.closest('[dir]')?.getAttribute('dir') === 'rtl'
+}
