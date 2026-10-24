@@ -4,7 +4,6 @@ import { BrowserRouter, Routes, Route, Outlet, Navigate } from 'react-router-dom
 import Navbar from './components/Navbar'
 import Footer from './components/home/Footer'
 import HomePage from './pages/HomePage'
-import { ToastProvider } from './components/ui'
 import RequireAuth from './components/RequireAuth'
 import { useAuthStore } from './store/authStore'
 
@@ -27,6 +26,8 @@ const AboutPage = lazy(() => import('./pages/AboutPage'))
 const ContactPage = lazy(() => import('./pages/ContactPage'))
 const PrivacyPage = lazy(() => import('./pages/PrivacyPage'))
 const TermsPage = lazy(() => import('./pages/TermsPage'))
+// Development-only component showcase; compiled out of production builds.
+const DesignSystemPage = import.meta.env.DEV ? lazy(() => import('./pages/DesignSystemPage')) : null
 
 function MainLayout() {
   return (
@@ -36,7 +37,6 @@ function MainLayout() {
         <Outlet />
       </div>
       <Footer />
-      <ToastProvider />
     </div>
   )
 }
@@ -70,13 +70,14 @@ function App() {
     <BrowserRouter>
       <Suspense fallback={<RouteSpinner />}>
         <Routes>
-          {/* RequireAuth redirects unauthenticated users here; /login hosts the real Clerk <SignIn/>. */}
+          {/* RequireAuth redirects unauthenticated users here. */}
           <Route path="/sign-in" element={<Navigate to="/login" replace />} />
           <Route path="/login/*" element={<AuthLayout><LoginPage /></AuthLayout>} />
           <Route path="/register/*" element={<AuthLayout><RegisterPage /></AuthLayout>} />
           <Route path="/verify-pending" element={<AuthLayout><VerifyPendingPage /></AuthLayout>} />
           <Route path="/verify-email" element={<AuthLayout><VerifyEmailPage /></AuthLayout>} />
           <Route path="/auth/callback" element={<AuthCallbackPage />} />
+          {DesignSystemPage && <Route path="/design" element={<DesignSystemPage />} />}
           <Route path="/admin" element={<RequireAuth requireRole="admin"><AdminDashboard /></RequireAuth>} />
           <Route element={<MainLayout />}>
             <Route path="/" element={<HomePage />} />

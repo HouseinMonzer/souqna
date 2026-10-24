@@ -124,7 +124,8 @@
     "creditCard": "بطاقة ائتمان",
     "placeOrder": "تأكيد الطلب",
     "orderConfirmed": "تم تأكيد الطلب!",
-    "orderNumber": "طلب رقم #"
+    "orderNumber": "طلب رقم #",
+    "fillRequired": "يرجى إدخال الاسم والعنوان والمدينة ورقم الهاتف."
   },
   "auth": {
     "loginTitle": "أهلاً بعودتك",
@@ -142,6 +143,46 @@
     "noAccount": "ليس لديك حساب؟",
     "haveAccount": "لديك حساب بالفعل؟",
     "signUp": "أنشئ حساباً",
-    "signIn": "سجّل دخولك"
+    "signIn": "سجّل دخولك",
+    "googleFailed": "فشل تسجيل الدخول عبر Google. حاول مجدداً.",
+    "facebookFailed": "فشل تسجيل الدخول عبر Facebook. حاول مجدداً.",
+    "oauthAccountExists": "يوجد حساب بهذا البريد الإلكتروني. سجّل الدخول بكلمة المرور أولاً."
+  },
+  "ui": {
+    "close": "إغلاق",
+    "previous": "السابق",
+    "next": "التالي",
+    "page": "الصفحة {{page}}",
+    "pagination": "التنقل بين الصفحات",
+    "breadcrumb": "مسار التنقل",
+    "increase": "زيادة الكمية",
+    "decrease": "إنقاص الكمية",
+    "quantity": "الكمية",
+    "ratingValue": "التقييم {{value}} من 5",
+    "ratingInput": "التقييم",
+    "stars_zero": "{{count}} نجمة",
+    "stars_one": "نجمة واحدة",
+    "stars_two": "نجمتان",
+    "stars_few": "{{count}} نجوم",
+    "stars_many": "{{count}} نجمة",
+    "stars_other": "{{count}} نجمة",
+    "reviews_zero": "لا تقييمات",
+    "reviews_one": "تقييم واحد",
+    "reviews_two": "تقييمان",
+    "reviews_few": "{{count}} تقييمات",
+    "reviews_many": "{{count}} تقييمًا",
+    "reviews_other": "{{count}} تقييم",
+    "off": "خصم {{percent}}%",
+    "wasPrice": "السعر السابق {{price}}",
+    "image": "الصورة {{index}} من {{total}}",
+    "previousImage": "الصورة السابقة",
+    "nextImage": "الصورة التالية",
+    "showImage": "عرض الصورة {{index}}",
+    "noImage": "لا توجد صورة",
+    "loading": "جارٍ التحميل…",
+    "noResults": "لا يوجد شيء لعرضه بعد",
+    "sortBy": "ترتيب حسب {{column}}",
+    "notifications": "الإشعارات",
+    "pageOf": "الصفحة {{page}} من {{count}}"
   }
 }

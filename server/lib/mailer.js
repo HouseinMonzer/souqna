@@ -1,14 +1,22 @@
 const nodemailer = require('nodemailer')
+const env = require('../config/env')
+const { logger } = require('./logger')
 
 const CLIENT_URL = process.env.CLIENT_URL || 'http://localhost:5173'
 const EMAIL_FROM = process.env.EMAIL_FROM || '"SouQna" <noreply@souqna.com>'
+
+const HTML_ESCAPES = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }
+// Every user-supplied value interpolated into an email must go through esc().
+const esc = value => String(value ?? '').replace(/[&<>"']/g, ch => HTML_ESCAPES[ch])
 
 let _transporter = null
 
 async function getTransporter() {
   if (_transporter) return _transporter
 
-  if (process.env.SMTP_HOST) {
+  if (env.NODE_ENV === 'test') {
+    _transporter = nodemailer.createTransport({ jsonTransport: true })
+  } else if (process.env.SMTP_HOST) {
     _transporter = nodemailer.createTransport({
       host: process.env.SMTP_HOST,
       port: Number(process.env.SMTP_PORT || 587),
@@ -22,21 +30,25 @@ async function getTransporter() {
       port: 587,
       auth: { user: test.user, pass: test.pass },
     })
-    console.log('[email] No SMTP configured — using Ethereal test account:', test.user)
+    logger.info({ account: test.user }, 'email: no SMTP configured, using Ethereal test inbox')
   }
 
   return _transporter
 }
 
+// In tests every message is recorded here instead of being delivered.
+const sentMail = []
+
 async function send(to, subject, html) {
   try {
     const t = await getTransporter()
     const info = await t.sendMail({ from: EMAIL_FROM, to, subject, html })
+    if (env.NODE_ENV === 'test') sentMail.push({ to, subject, html })
     const preview = nodemailer.getTestMessageUrl(info)
-    if (preview) console.log(`[email] Preview → ${preview}`)
+    if (preview) logger.info({ preview }, 'email preview')
     return info
   } catch (err) {
-    console.error('[email] Failed to send to', to, err.message)
+    logger.error({ err: err.message, subject }, 'email send failed')
   }
 }
 
@@ -92,7 +104,7 @@ function sendVerificationEmail(to, name, token) {
 
   const body = `
     <h2 style="margin:0 0 8px;color:#1A2E0E;font-family:Georgia,serif;">Verify your email address</h2>
-    <p style="margin:0 0 20px;color:#4a5a3e;font-size:15px;">Hi ${firstName},</p>
+    <p style="margin:0 0 20px;color:#4a5a3e;font-size:15px;">Hi ${esc(firstName)},</p>
     <p style="margin:0 0 20px;color:#4a5a3e;font-size:15px;">
       Thanks for joining SouQna! Click the button below to verify your email address and activate your account.
     </p>
@@ -110,9 +122,9 @@ function sendVerificationEmail(to, name, token) {
 function sendOrderConfirmation(to, { orderNumber, items, subtotal, shippingCost, total, shippingName, shippingAddress, shippingCity }) {
   const itemRows = items.map(i => `
     <tr>
-      <td style="padding:8px 0;border-bottom:1px solid #f0ece4;font-size:14px;color:#1A2E0E;">${i.productName} ${i.variantInfo ? `<span style="color:#888;">(${i.variantInfo})</span>` : ''}</td>
-      <td style="padding:8px 0;border-bottom:1px solid #f0ece4;font-size:14px;color:#888;text-align:center;">x${i.quantity}</td>
-      <td style="padding:8px 0;border-bottom:1px solid #f0ece4;font-size:14px;color:#1A2E0E;text-align:right;">$${(i.unitPrice * i.quantity).toFixed(2)}</td>
+      <td style="padding:8px 0;border-bottom:1px solid #f0ece4;font-size:14px;color:#1A2E0E;">${esc(i.productName)} ${i.variantInfo ? `<span style="color:#888;">(${esc(i.variantInfo)})</span>` : ''}</td>
+      <td style="padding:8px 0;border-bottom:1px solid #f0ece4;font-size:14px;color:#888;text-align:center;">x${Number(i.quantity)}</td>
+      <td style="padding:8px 0;border-bottom:1px solid #f0ece4;font-size:14px;color:#1A2E0E;text-align:right;">$${(Number(i.unitPrice) * i.quantity).toFixed(2)}</td>
     </tr>
   `).join('')
 
@@ -130,15 +142,15 @@ function sendOrderConfirmation(to, { orderNumber, items, subtotal, shippingCost,
       ${itemRows}
       <tr>
         <td colspan="2" style="padding:10px 0 4px;font-size:13px;color:#888;">Subtotal</td>
-        <td style="padding:10px 0 4px;font-size:13px;color:#888;text-align:right;">$${subtotal.toFixed(2)}</td>
+        <td style="padding:10px 0 4px;font-size:13px;color:#888;text-align:right;">$${Number(subtotal).toFixed(2)}</td>
       </tr>
       <tr>
         <td colspan="2" style="padding:4px 0;font-size:13px;color:#888;">Shipping</td>
-        <td style="padding:4px 0;font-size:13px;color:#888;text-align:right;">$${shippingCost.toFixed(2)}</td>
+        <td style="padding:4px 0;font-size:13px;color:#888;text-align:right;">$${Number(shippingCost).toFixed(2)}</td>
       </tr>
       <tr>
         <td colspan="2" style="padding:10px 0 0;font-size:16px;font-weight:700;color:#1A2E0E;">Total</td>
-        <td style="padding:10px 0 0;font-size:16px;font-weight:700;color:#5C8A2E;text-align:right;">$${total.toFixed(2)}</td>
+        <td style="padding:10px 0 0;font-size:16px;font-weight:700;color:#5C8A2E;text-align:right;">$${Number(total).toFixed(2)}</td>
       </tr>
     </table>
 
@@ -146,9 +158,9 @@ function sendOrderConfirmation(to, { orderNumber, items, subtotal, shippingCost,
 
     <h3 style="margin:0 0 10px;color:#1A2E0E;font-size:15px;">Delivery address</h3>
     <p style="margin:0;font-size:14px;color:#4a5a3e;line-height:1.7;">
-      ${shippingName}<br>
-      ${shippingAddress || ''}<br>
-      ${shippingCity || ''}
+      ${esc(shippingName)}<br>
+      ${esc(shippingAddress)}<br>
+      ${esc(shippingCity)}
     </p>
 
     ${divider()}
@@ -162,20 +174,20 @@ function sendOrderConfirmation(to, { orderNumber, items, subtotal, shippingCost,
 function sendVendorNewOrderAlert(to, { storeName, orderNumber, buyerFirstName, items, total, shippingAddress, shippingCity, dashboardUrl }) {
   const itemRows = items.map(i => `
     <tr>
-      <td style="padding:8px 0;border-bottom:1px solid #f0ece4;font-size:14px;color:#1A2E0E;">${i.productName}</td>
-      <td style="padding:8px 0;border-bottom:1px solid #f0ece4;font-size:14px;color:#888;text-align:center;">x${i.quantity}</td>
-      <td style="padding:8px 0;border-bottom:1px solid #f0ece4;font-size:14px;color:#1A2E0E;text-align:right;">$${(i.unitPrice * i.quantity).toFixed(2)}</td>
+      <td style="padding:8px 0;border-bottom:1px solid #f0ece4;font-size:14px;color:#1A2E0E;">${esc(i.productName)}</td>
+      <td style="padding:8px 0;border-bottom:1px solid #f0ece4;font-size:14px;color:#888;text-align:center;">x${Number(i.quantity)}</td>
+      <td style="padding:8px 0;border-bottom:1px solid #f0ece4;font-size:14px;color:#1A2E0E;text-align:right;">$${(Number(i.unitPrice) * i.quantity).toFixed(2)}</td>
     </tr>
   `).join('')
 
   const body = `
     <h2 style="margin:0 0 8px;color:#1A2E0E;font-family:Georgia,serif;">New order received!</h2>
-    <p style="margin:0 0 20px;color:#4a5a3e;font-size:15px;">Hi <strong>${storeName}</strong>, you have a new order waiting for your approval.</p>
+    <p style="margin:0 0 20px;color:#4a5a3e;font-size:15px;">Hi <strong>${esc(storeName)}</strong>, you have a new order waiting for your approval.</p>
 
     <div style="background:#f7faf3;border:1px solid #d4e8b0;border-radius:8px;padding:16px 20px;margin-bottom:24px;">
       <p style="margin:0;font-size:13px;color:#5C8A2E;font-weight:700;">ORDER NUMBER</p>
       <p style="margin:4px 0 0;font-size:22px;font-weight:700;color:#1A2E0E;font-family:Georgia,serif;">${orderNumber}</p>
-      <p style="margin:6px 0 0;font-size:13px;color:#888;">Buyer: <strong>${buyerFirstName}</strong></p>
+      <p style="margin:6px 0 0;font-size:13px;color:#888;">Buyer: <strong>${esc(buyerFirstName)}</strong></p>
     </div>
 
     <h3 style="margin:0 0 12px;color:#1A2E0E;font-size:15px;">Items to fulfill</h3>
@@ -183,13 +195,13 @@ function sendVendorNewOrderAlert(to, { storeName, orderNumber, buyerFirstName, i
       ${itemRows}
       <tr>
         <td colspan="2" style="padding:10px 0 0;font-size:16px;font-weight:700;color:#1A2E0E;">Your total</td>
-        <td style="padding:10px 0 0;font-size:16px;font-weight:700;color:#5C8A2E;text-align:right;">$${total.toFixed(2)}</td>
+        <td style="padding:10px 0 0;font-size:16px;font-weight:700;color:#5C8A2E;text-align:right;">$${Number(total).toFixed(2)}</td>
       </tr>
     </table>
 
     ${divider()}
 
-    <p style="margin:0 0 8px;font-size:14px;color:#4a5a3e;"><strong>Deliver to:</strong> ${shippingAddress || ''}, ${shippingCity || ''}</p>
+    <p style="margin:0 0 8px;font-size:14px;color:#4a5a3e;"><strong>Deliver to:</strong> ${esc(shippingAddress)}, ${esc(shippingCity)}</p>
 
     ${divider()}
     <p style="margin:0 0 16px;font-size:15px;color:#4a5a3e;">Please review and approve or reject this order from your vendor dashboard.</p>
@@ -209,12 +221,12 @@ function sendOrderStatusUpdate(to, { orderNumber, storeName, newStatus, items, t
     cancelled:  'cancelled your order',
   }[newStatus] || `updated your order status to ${newStatus}`
 
-  const itemList = items.map(i => `<li style="margin-bottom:4px;font-size:14px;color:#4a5a3e;">${i.productName} × ${i.quantity}</li>`).join('')
+  const itemList = items.map(i => `<li style="margin-bottom:4px;font-size:14px;color:#4a5a3e;">${esc(i.productName)} × ${i.quantity}</li>`).join('')
 
   const body = `
     <h2 style="margin:0 0 8px;color:#1A2E0E;font-family:Georgia,serif;">Order update</h2>
     <p style="margin:0 0 20px;color:#4a5a3e;font-size:15px;">
-      <strong>${storeName}</strong> ${statusLabel}.
+      <strong>${esc(storeName)}</strong> ${statusLabel}.
     </p>
 
     <div style="background:#f7faf3;border:1px solid #d4e8b0;border-radius:8px;padding:16px 20px;margin-bottom:24px;">
@@ -224,7 +236,7 @@ function sendOrderStatusUpdate(to, { orderNumber, storeName, newStatus, items, t
 
     <ul style="margin:0 0 20px;padding-left:20px;">${itemList}</ul>
 
-    ${trackingNumber ? `<p style="margin:0 0 20px;font-size:14px;color:#4a5a3e;"><strong>Tracking #:</strong> ${trackingNumber}</p>` : ''}
+    ${trackingNumber ? `<p style="margin:0 0 20px;font-size:14px;color:#4a5a3e;"><strong>Tracking #:</strong> ${esc(trackingNumber)}</p>` : ''}
 
     ${divider()}
     <p style="text-align:center;">${btn(`${CLIENT_URL}/dashboard`, 'Track Your Order')}</p>
@@ -232,7 +244,29 @@ function sendOrderStatusUpdate(to, { orderNumber, storeName, newStatus, items, t
   return send(to, `Order update — ${orderNumber}`, layout('Order Update', body))
 }
 
+function sendSubscriptionExpiring(to, { storeName, endDate }) {
+  const body = `
+    <h2 style="margin:0 0 8px;color:#1A2E0E;font-family:Georgia,serif;">Your subscription ends soon</h2>
+    <p style="margin:0 0 20px;color:#4a5a3e;font-size:15px;">Hi <strong>${esc(storeName)}</strong>, your SouQna vendor subscription ends on <strong>${esc(new Date(endDate).toDateString())}</strong>.</p>
+    <p style="margin:0 0 20px;color:#4a5a3e;font-size:15px;">Renew before then to keep your products visible to customers.</p>
+    <p style="text-align:center;">${btn(`${CLIENT_URL}/subscription`, 'Renew Subscription')}</p>
+  `
+  return send(to, 'Your SouQna subscription ends in 7 days', layout('Subscription Ending', body))
+}
+
+function sendSubscriptionExpired(to, { storeName }) {
+  const body = `
+    <h2 style="margin:0 0 8px;color:#1A2E0E;font-family:Georgia,serif;">Your subscription has ended</h2>
+    <p style="margin:0 0 20px;color:#4a5a3e;font-size:15px;">Hi <strong>${esc(storeName)}</strong>, your SouQna vendor subscription has expired and your products are hidden from the marketplace.</p>
+    <p style="text-align:center;">${btn(`${CLIENT_URL}/subscription`, 'Renew Now')}</p>
+  `
+  return send(to, 'Your SouQna subscription has expired', layout('Subscription Expired', body))
+}
+
 module.exports = {
+  sentMail,
+  sendSubscriptionExpiring,
+  sendSubscriptionExpired,
   sendVerificationEmail,
   sendOrderConfirmation,
   sendVendorNewOrderAlert,
