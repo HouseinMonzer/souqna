@@ -22,4 +22,10 @@ export default defineConfig([
       'react-hooks/set-state-in-effect': 'off',
     },
   },
+  {
+    // The UI kit deliberately co-exports variants, primitives and helpers
+    // (buttonVariants, toast(), Radix roots) next to its components.
+    files: ['src/components/ui/**/*.{ts,tsx}'],
+    rules: { 'react-refresh/only-export-components': 'off' },
+  },
 ])
