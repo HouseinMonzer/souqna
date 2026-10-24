@@ -124,7 +124,8 @@
     "creditCard": "Credit Card",
     "placeOrder": "Place Order",
     "orderConfirmed": "Order Confirmed!",
-    "orderNumber": "Order #"
+    "orderNumber": "Order #",
+    "fillRequired": "Please fill in your name, address, city and phone."
   },
   "auth": {
     "loginTitle": "Welcome Back",

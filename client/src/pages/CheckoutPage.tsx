@@ -32,6 +32,9 @@ function CheckoutPage() {
   })
   const [paymentMethod, setPaymentMethod] = useState('cash_delivery')
   const [submitting, setSubmitting] = useState(false)
+  // One key per checkout: retries after a dropped connection replay the same
+  // order on the server instead of placing a duplicate.
+  const [idempotencyKey] = useState(() => crypto.randomUUID())
   const [error, setError] = useState('')
   const [orderNumber, setOrderNumber] = useState('')
   const isMobile = useIsMobile()
@@ -88,7 +91,7 @@ function CheckoutPage() {
 
   const handleSubmit = async () => {
     if (!form.name || !form.address || !form.city || !form.phone) {
-      setError(t('common.loading'))
+      setError(t('checkout.fillRequired'))
       return
     }
     setSubmitting(true)
@@ -96,6 +99,7 @@ function CheckoutPage() {
     try {
       const res = await apiFetch<{ data: { order_number: string } }>('/api/orders', {
         method: 'POST',
+        headers: { 'Idempotency-Key': idempotencyKey },
         body: JSON.stringify({
           cartItems: cart.items.map(i => ({
             product_id: i.product_id,

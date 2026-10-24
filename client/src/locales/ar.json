@@ -124,7 +124,8 @@
     "creditCard": "بطاقة ائتمان",
     "placeOrder": "تأكيد الطلب",
     "orderConfirmed": "تم تأكيد الطلب!",
-    "orderNumber": "طلب رقم #"
+    "orderNumber": "طلب رقم #",
+    "fillRequired": "يرجى إدخال الاسم والعنوان والمدينة ورقم الهاتف."
   },
   "auth": {
     "loginTitle": "أهلاً بعودتك",
