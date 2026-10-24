@@ -21,16 +21,26 @@ const socialHandleOrUrl = z.union([
 
 const imageDataUrl = z.string().max(8 * 1024 * 1024).regex(/^data:image\/[a-z0-9.+-]+;base64,/i, 'Expected an image data URL')
 
+const MAX_PAGE_SIZE = 50
+
+// Larger page sizes are clamped rather than rejected so older clients keep working.
 const pageQuery = {
   page: z.coerce.number().int().min(1).max(10_000).default(1),
-  limit: z.coerce.number().int().min(1).max(100).optional(),
+  limit: z.coerce.number().int().min(1).transform(n => Math.min(n, MAX_PAGE_SIZE)).optional(),
+}
+
+const paginate = ({ page, limit }, defaultLimit = 20) => {
+  const take = limit ?? defaultLimit
+  return { take, skip: (page - 1) * take, page, limit: take }
 }
 
 const searchTerm = z.string().trim().max(200).optional()
 
 class ValidationError extends Error {
   constructor(error) {
-    super('Invalid request')
+    const first = error.issues[0]
+    const field = first?.path?.length ? `${first.path.join('.')}: ` : ''
+    super(first ? `${field}${first.message}` : 'Invalid request')
     this.status = 400
     this.errors = z.flattenError(error)
   }
@@ -64,6 +74,8 @@ module.exports = {
   socialHandleOrUrl,
   imageDataUrl,
   pageQuery,
+  paginate,
+  MAX_PAGE_SIZE,
   searchTerm,
   validate,
   ValidationError,

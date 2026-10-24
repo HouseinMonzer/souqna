@@ -1,15 +1,20 @@
-const { execSync } = require('node:child_process')
+const { execFileSync } = require('node:child_process')
 const path = require('node:path')
 
 if (!process.env.TEST_DATABASE_URL) {
   throw new Error('TEST_DATABASE_URL is not set. Run `eval "$(./scripts/test-db.sh start)"` first.')
 }
 
-// Every run gets its own empty schema, so tests never touch existing data and
-// no destructive reset is needed.
-const schema = `test_${process.pid}_${Date.now()}`
+// Each test file gets its own throwaway database, built by the real migration
+// chain, so tests never touch existing data and the migrations are exercised
+// on every run.
+const ROOT = path.join(__dirname, '../..')
+const database = `souqna_t_${process.pid}_${Date.now()}`
+const dbScript = path.join(__dirname, 'db.js')
+execFileSync(process.execPath, [dbScript, 'create', database], { env: process.env, stdio: 'inherit' })
+
 const url = new URL(process.env.TEST_DATABASE_URL)
-url.searchParams.set('schema', schema)
+url.pathname = `/${database}`
 
 process.env.NODE_ENV = 'test'
 process.env.DATABASE_URL = url.toString()
@@ -19,18 +24,14 @@ process.env.SESSION_SECRET = 'test-session-secret-that-is-at-least-32-chars'
 process.env.CLIENT_ORIGIN = 'http://allowed.test'
 delete process.env.UPLOADTHING_TOKEN
 
-execSync('npx prisma db push --skip-generate', {
-  cwd: path.join(__dirname, '../..'),
-  env: process.env,
-  stdio: 'ignore',
-})
+execFileSync('npx', ['prisma', 'migrate', 'deploy'], { cwd: ROOT, env: process.env, stdio: 'ignore' })
 
 const jwt = require('jsonwebtoken')
 const { app, prisma } = require('../app')
 
 async function teardown() {
-  await prisma.$executeRawUnsafe(`DROP SCHEMA IF EXISTS "${schema}" CASCADE`)
   await prisma.$disconnect()
+  execFileSync(process.execPath, [dbScript, 'drop', database], { env: process.env, stdio: 'inherit' })
 }
 
 let counter = 0

@@ -1,4 +1,6 @@
 const nodemailer = require('nodemailer')
+const env = require('../config/env')
+const { logger } = require('./logger')
 
 const CLIENT_URL = process.env.CLIENT_URL || 'http://localhost:5173'
 const EMAIL_FROM = process.env.EMAIL_FROM || '"SouQna" <noreply@souqna.com>'
@@ -12,7 +14,9 @@ let _transporter = null
 async function getTransporter() {
   if (_transporter) return _transporter
 
-  if (process.env.SMTP_HOST) {
+  if (env.NODE_ENV === 'test') {
+    _transporter = nodemailer.createTransport({ jsonTransport: true })
+  } else if (process.env.SMTP_HOST) {
     _transporter = nodemailer.createTransport({
       host: process.env.SMTP_HOST,
       port: Number(process.env.SMTP_PORT || 587),
@@ -26,21 +30,25 @@ async function getTransporter() {
       port: 587,
       auth: { user: test.user, pass: test.pass },
     })
-    console.log('[email] No SMTP configured — using Ethereal test account:', test.user)
+    logger.info({ account: test.user }, 'email: no SMTP configured, using Ethereal test inbox')
   }
 
   return _transporter
 }
 
+// In tests every message is recorded here instead of being delivered.
+const sentMail = []
+
 async function send(to, subject, html) {
   try {
     const t = await getTransporter()
     const info = await t.sendMail({ from: EMAIL_FROM, to, subject, html })
+    if (env.NODE_ENV === 'test') sentMail.push({ to, subject, html })
     const preview = nodemailer.getTestMessageUrl(info)
-    if (preview) console.log(`[email] Preview → ${preview}`)
+    if (preview) logger.info({ preview }, 'email preview')
     return info
   } catch (err) {
-    console.error('[email] Failed to send to', to, err.message)
+    logger.error({ err: err.message, subject }, 'email send failed')
   }
 }
 
@@ -116,7 +124,7 @@ function sendOrderConfirmation(to, { orderNumber, items, subtotal, shippingCost,
     <tr>
       <td style="padding:8px 0;border-bottom:1px solid #f0ece4;font-size:14px;color:#1A2E0E;">${esc(i.productName)} ${i.variantInfo ? `<span style="color:#888;">(${esc(i.variantInfo)})</span>` : ''}</td>
       <td style="padding:8px 0;border-bottom:1px solid #f0ece4;font-size:14px;color:#888;text-align:center;">x${Number(i.quantity)}</td>
-      <td style="padding:8px 0;border-bottom:1px solid #f0ece4;font-size:14px;color:#1A2E0E;text-align:right;">$${(i.unitPrice * i.quantity).toFixed(2)}</td>
+      <td style="padding:8px 0;border-bottom:1px solid #f0ece4;font-size:14px;color:#1A2E0E;text-align:right;">$${(Number(i.unitPrice) * i.quantity).toFixed(2)}</td>
     </tr>
   `).join('')
 
@@ -134,15 +142,15 @@ function sendOrderConfirmation(to, { orderNumber, items, subtotal, shippingCost,
       ${itemRows}
       <tr>
         <td colspan="2" style="padding:10px 0 4px;font-size:13px;color:#888;">Subtotal</td>
-        <td style="padding:10px 0 4px;font-size:13px;color:#888;text-align:right;">$${subtotal.toFixed(2)}</td>
+        <td style="padding:10px 0 4px;font-size:13px;color:#888;text-align:right;">$${Number(subtotal).toFixed(2)}</td>
       </tr>
       <tr>
         <td colspan="2" style="padding:4px 0;font-size:13px;color:#888;">Shipping</td>
-        <td style="padding:4px 0;font-size:13px;color:#888;text-align:right;">$${shippingCost.toFixed(2)}</td>
+        <td style="padding:4px 0;font-size:13px;color:#888;text-align:right;">$${Number(shippingCost).toFixed(2)}</td>
       </tr>
       <tr>
         <td colspan="2" style="padding:10px 0 0;font-size:16px;font-weight:700;color:#1A2E0E;">Total</td>
-        <td style="padding:10px 0 0;font-size:16px;font-weight:700;color:#5C8A2E;text-align:right;">$${total.toFixed(2)}</td>
+        <td style="padding:10px 0 0;font-size:16px;font-weight:700;color:#5C8A2E;text-align:right;">$${Number(total).toFixed(2)}</td>
       </tr>
     </table>
 
@@ -168,7 +176,7 @@ function sendVendorNewOrderAlert(to, { storeName, orderNumber, buyerFirstName, i
     <tr>
       <td style="padding:8px 0;border-bottom:1px solid #f0ece4;font-size:14px;color:#1A2E0E;">${esc(i.productName)}</td>
       <td style="padding:8px 0;border-bottom:1px solid #f0ece4;font-size:14px;color:#888;text-align:center;">x${Number(i.quantity)}</td>
-      <td style="padding:8px 0;border-bottom:1px solid #f0ece4;font-size:14px;color:#1A2E0E;text-align:right;">$${(i.unitPrice * i.quantity).toFixed(2)}</td>
+      <td style="padding:8px 0;border-bottom:1px solid #f0ece4;font-size:14px;color:#1A2E0E;text-align:right;">$${(Number(i.unitPrice) * i.quantity).toFixed(2)}</td>
     </tr>
   `).join('')
 
@@ -187,7 +195,7 @@ function sendVendorNewOrderAlert(to, { storeName, orderNumber, buyerFirstName, i
       ${itemRows}
       <tr>
         <td colspan="2" style="padding:10px 0 0;font-size:16px;font-weight:700;color:#1A2E0E;">Your total</td>
-        <td style="padding:10px 0 0;font-size:16px;font-weight:700;color:#5C8A2E;text-align:right;">$${total.toFixed(2)}</td>
+        <td style="padding:10px 0 0;font-size:16px;font-weight:700;color:#5C8A2E;text-align:right;">$${Number(total).toFixed(2)}</td>
       </tr>
     </table>
 
@@ -236,7 +244,29 @@ function sendOrderStatusUpdate(to, { orderNumber, storeName, newStatus, items, t
   return send(to, `Order update — ${orderNumber}`, layout('Order Update', body))
 }
 
+function sendSubscriptionExpiring(to, { storeName, endDate }) {
+  const body = `
+    <h2 style="margin:0 0 8px;color:#1A2E0E;font-family:Georgia,serif;">Your subscription ends soon</h2>
+    <p style="margin:0 0 20px;color:#4a5a3e;font-size:15px;">Hi <strong>${esc(storeName)}</strong>, your SouQna vendor subscription ends on <strong>${esc(new Date(endDate).toDateString())}</strong>.</p>
+    <p style="margin:0 0 20px;color:#4a5a3e;font-size:15px;">Renew before then to keep your products visible to customers.</p>
+    <p style="text-align:center;">${btn(`${CLIENT_URL}/subscription`, 'Renew Subscription')}</p>
+  `
+  return send(to, 'Your SouQna subscription ends in 7 days', layout('Subscription Ending', body))
+}
+
+function sendSubscriptionExpired(to, { storeName }) {
+  const body = `
+    <h2 style="margin:0 0 8px;color:#1A2E0E;font-family:Georgia,serif;">Your subscription has ended</h2>
+    <p style="margin:0 0 20px;color:#4a5a3e;font-size:15px;">Hi <strong>${esc(storeName)}</strong>, your SouQna vendor subscription has expired and your products are hidden from the marketplace.</p>
+    <p style="text-align:center;">${btn(`${CLIENT_URL}/subscription`, 'Renew Now')}</p>
+  `
+  return send(to, 'Your SouQna subscription has expired', layout('Subscription Expired', body))
+}
+
 module.exports = {
+  sentMail,
+  sendSubscriptionExpiring,
+  sendSubscriptionExpired,
   sendVerificationEmail,
   sendOrderConfirmation,
   sendVendorNewOrderAlert,

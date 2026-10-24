@@ -1,3 +1,5 @@
+const { HttpError } = require('./errors')
+
 const MAX_UPLOAD_BYTES = 5 * 1024 * 1024
 
 const SIGNATURES = {
@@ -7,11 +9,9 @@ const SIGNATURES = {
   'image/webp': { ext: 'webp', test: b => b.subarray(0, 4).toString('ascii') === 'RIFF' && b.subarray(8, 12).toString('ascii') === 'WEBP' },
 }
 
-class UploadError extends Error {
+class UploadError extends HttpError {
   constructor(message, status = 400) {
-    super(message)
-    this.status = status
-    this.expose = true
+    super(status, message)
   }
 }
 

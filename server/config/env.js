@@ -8,6 +8,8 @@ const optional = z.string().trim().min(1).optional()
 const schema = z.object({
   NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
   PORT: z.coerce.number().int().positive().default(4000),
+  LOG_LEVEL: z.enum(['fatal', 'error', 'warn', 'info', 'debug', 'trace', 'silent']).optional(),
+  DISABLE_JOBS: z.enum(['true', 'false']).optional(),
   DATABASE_URL: z.string().url(),
   JWT_SECRET: z.string().min(32).optional(),
   JWT_EXPIRES_IN: z.string().default('7d'),

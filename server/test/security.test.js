@@ -86,7 +86,7 @@ describe('authorization', () => {
     assert.equal(update.status, 404)
     assert.equal(remove.status, 404)
     const unchanged = await prisma.product.findUnique({ where: { id: productB.id } })
-    assert.equal(unchanged.price, 10)
+    assert.equal(Number(unchanged.price), 10)
     assert.equal(unchanged.status, 'active')
   })
 
