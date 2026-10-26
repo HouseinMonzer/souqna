@@ -1,461 +1,183 @@
-import { useParams, useNavigate, Link } from 'react-router-dom'
-import { useEffect, useState, useMemo } from 'react'
+import { useMemo, useState } from 'react'
+import { useNavigate, useParams } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
-import { vendorService } from '../api/vendors'
-import { productService } from '../api/products'
-import { useCartStore } from '../store/cartStore'
-import { Stars, ProductCardSkeleton, EmptyState } from '../components/ui'
-import { useIsMobile } from '../hooks/useMediaQuery'
+import { BadgeCheck, CalendarDays, Globe, MapPin, MessageCircle, MessageSquare, Phone, Search, Store } from 'lucide-react'
+import {
+  Avatar, Breadcrumbs, Button, EmptyState, Input, Pagination, Rating, Select, Skeleton, Tabs, TabsContent, TabsList, TabsTrigger,
+} from '../components/ui'
 import { PlatformIcon } from '../components/icons/SocialIcons'
-import type { Vendor, Product, Category } from '../types/database.types'
+import { Container } from '../components/layout/Container'
+import { ProductGrid } from '../components/commerce/ProductCard'
+import { ErrorState } from '../components/commerce/ErrorState'
+import { catalog, reviews, type ProductSort } from '../api/catalog'
+import { useAsync } from '../hooks/useAsync'
+import { usePageTitle } from '../hooks/usePageTitle'
+import { safeExternalUrl } from '../lib/utils'
+import type { Vendor } from '../types/database.types'
 
+const SORTS: ProductSort[] = ['newest', 'popular', 'price-asc', 'price-desc']
+const SORT_LABELS: Record<string, string> = { newest: 'shop.sortNewest', popular: 'shop.sortPopular', 'price-asc': 'shop.sortPriceAsc', 'price-desc': 'shop.sortPriceDesc' }
 
-type SortOption = 'newest' | 'price-asc' | 'price-desc' | 'popular'
+function socialLinks(vendor: Vendor) {
+  const handle = (value: string | null, base: string) => {
+    if (!value) return null
+    return safeExternalUrl(value.startsWith('http') ? value : `${base}${value.replace(/^@/, '')}`)
+  }
+  return [
+    { platform: 'instagram', label: 'Instagram', href: handle(vendor.instagram, 'https://instagram.com/') },
+    { platform: 'facebook', label: 'Facebook', href: handle(vendor.facebook, 'https://facebook.com/') },
+    { platform: 'tiktok', label: 'TikTok', href: handle(vendor.tiktok, 'https://tiktok.com/@') },
+    { platform: 'youtube', label: 'YouTube', href: handle(vendor.youtube, 'https://youtube.com/@') },
+  ].filter((link): link is { platform: string; label: string; href: string } => Boolean(link.href))
+}
 
-function VendorProfilePage() {
-  const { slug } = useParams()
-  const navigate = useNavigate()
-  const { t, i18n } = useTranslation()
-  const isRTL = i18n.language?.startsWith('ar')
-  const { addItem } = useCartStore()
-
-  const [vendor, setVendor] = useState<Vendor | null>(null)
-  const [products, setProducts] = useState<Product[]>([])
-  const [loading, setLoading] = useState(true)
-  const [addedId, setAddedId] = useState<string | null>(null)
+function StoreProducts({ vendorId }: { vendorId: string }) {
+  const { t } = useTranslation()
   const [search, setSearch] = useState('')
-  const [sort, setSort] = useState<SortOption>('newest')
-  const [activeCategory, setActiveCategory] = useState<string>('all')
-  const isMobile = useIsMobile()
-
-  useEffect(() => {
-    if (!slug) return
-    document.title = `${t('common.loading')} | SouQna`
-    const fetchData = async () => {
-      setLoading(true)
-      try {
-        const vendorData = await vendorService.getBySlug(slug)
-        const productsData = vendorData ? await productService.getByVendor(vendorData.id) : []
-        setVendor(vendorData)
-        setProducts(productsData ?? [])
-        if (vendorData) document.title = `${vendorData.store_name} | SouqNa`
-      } finally {
-        setLoading(false)
-      }
-    }
-    fetchData()
-  }, [slug])
-
-  const categories = useMemo<Category[]>(() => {
-    const seen = new Set<string>()
-    const cats: Category[] = []
-    for (const p of products) {
-      const cat = p.categories || p.category
-      if (cat && !seen.has(cat.id)) {
-        seen.add(cat.id)
-        cats.push(cat)
-      }
-    }
-    return cats
-  }, [products])
-
-  const filteredProducts = useMemo(() => {
-    let list = products
-    if (search.trim()) {
-      const q = search.toLowerCase()
-      list = list.filter(p => p.name.toLowerCase().includes(q) || p.short_description?.toLowerCase().includes(q))
-    }
-    if (activeCategory !== 'all') {
-      list = list.filter(p => (p.categories?.id || p.category?.id) === activeCategory)
-    }
-    if (sort === 'price-asc') list = [...list].sort((a, b) => a.price - b.price)
-    else if (sort === 'price-desc') list = [...list].sort((a, b) => b.price - a.price)
-    else if (sort === 'popular') list = [...list].sort((a, b) => b.total_sold - a.total_sold)
-    else list = [...list].sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
-    return list
-  }, [products, search, sort, activeCategory])
-
-  const handleAddToCart = (e: React.MouseEvent, product: Product) => {
-    e.stopPropagation()
-    const productCard = {
-      id: product.id,
-      name: product.name,
-      slug: product.slug,
-      price: product.price,
-      compare_price: product.compare_price,
-      rating: product.rating,
-      total_reviews: product.total_reviews,
-      total_sold: product.total_sold,
-      featured: product.featured,
-      primary_image: product.primary_image,
-      vendor: product.vendor || product.vendors || { id: vendor!.id, store_name: vendor!.store_name, slug: vendor!.slug },
-      category: product.category || product.categories || null,
-    }
-    addItem(productCard, 1, null)
-    setAddedId(product.id)
-    setTimeout(() => setAddedId(null), 1500)
-  }
-
-  if (loading) {
-    return (
-      <div style={{ backgroundColor: '#F7F2E8', minHeight: '100vh' }}>
-        {/* Hero skeleton */}
-        <div style={{ height: '340px', background: 'linear-gradient(135deg, #2D4A1E, #5C8A2E)', position: 'relative' }}>
-          <div style={{ maxWidth: '1200px', margin: '0 auto', padding: '48px 24px 0' }}>
-            <div style={{ height: '14px', width: '200px', borderRadius: '6px', backgroundColor: 'rgba(255,255,255,0.2)', marginBottom: '40px' }} />
-            <div style={{ display: 'flex', gap: '20px', alignItems: 'center' }}>
-              <div style={{ width: '110px', height: '110px', borderRadius: '50%', backgroundColor: 'rgba(255,255,255,0.2)' }} />
-              <div>
-                <div style={{ height: '32px', width: '220px', borderRadius: '8px', backgroundColor: 'rgba(255,255,255,0.2)', marginBottom: '12px' }} />
-                <div style={{ height: '14px', width: '320px', borderRadius: '6px', backgroundColor: 'rgba(255,255,255,0.15)' }} />
-              </div>
-            </div>
-          </div>
-        </div>
-        <div style={{ maxWidth: '1200px', margin: '32px auto', padding: '0 24px' }}>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(240px, 1fr))', gap: '18px' }}>
-            {Array.from({ length: 8 }).map((_, i) => <ProductCardSkeleton key={i} />)}
-          </div>
-        </div>
-      </div>
-    )
-  }
-
-  if (!vendor) {
-    return (
-      <div style={{ backgroundColor: '#F7F2E8', minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center' }} dir={isRTL ? 'rtl' : 'ltr'}>
-        <EmptyState icon="😕" title={t('vendors.noVendors')} message=""
-          action={() => navigate('/vendors')} actionLabel={`${isRTL ? '→' : '←'} ${t('vendors.title')}`} />
-      </div>
-    )
-  }
-
-  const socialLinks = [
-    vendor.instagram && { platform: 'instagram', href: vendor.instagram.startsWith('http') ? vendor.instagram : `https://instagram.com/${vendor.instagram}`, label: 'Instagram' },
-    vendor.facebook && { platform: 'facebook', href: vendor.facebook.startsWith('http') ? vendor.facebook : `https://facebook.com/${vendor.facebook}`, label: 'Facebook' },
-    vendor.tiktok && { platform: 'tiktok', href: vendor.tiktok.startsWith('http') ? vendor.tiktok : `https://tiktok.com/@${vendor.tiktok}`, label: 'TikTok' },
-    vendor.youtube && { platform: 'youtube', href: vendor.youtube.startsWith('http') ? vendor.youtube : `https://youtube.com/${vendor.youtube}`, label: 'YouTube' },
-  ].filter(Boolean) as { platform: string; href: string; label: string }[]
-
-  const vendorSocialLinks = (vendor.social_links || []).map(sl => ({
-    platform: sl.platform.toLowerCase(),
-    href: sl.url,
-    label: sl.platform,
-  }))
-
-  const allSocialLinks = [...socialLinks, ...vendorSocialLinks]
-
+  const [sort, setSort] = useState<ProductSort>('newest')
+  const [page, setPage] = useState(1)
+  const { data, loading, error, reload } = useAsync(
+    signal => catalog.products({ vendor: vendorId, search: search.trim() || undefined, sort, page, limit: 24 }, signal),
+    [vendorId, search, sort, page],
+  )
   return (
-    <div style={{ backgroundColor: '#F7F2E8', minHeight: '100vh' }} dir={isRTL ? 'rtl' : 'ltr'}>
-
-      {/* ── Cover + Profile Hero ─────────────────────────────────────────── */}
-      <div style={{ position: 'relative' }}>
-        {/* Cover image */}
-        <div style={{
-          height: '280px', position: 'relative', overflow: 'hidden',
-          background: vendor.cover_url
-            ? `url(${vendor.cover_url}) center/cover no-repeat`
-            : 'linear-gradient(135deg, #1a2f11 0%, #2D4A1E 40%, #5C8A2E 100%)',
-        }}>
-          <div style={{
-            position: 'absolute', inset: 0,
-            background: 'linear-gradient(to bottom, rgba(0,0,0,0.1) 0%, rgba(0,0,0,0.6) 100%)',
-          }} />
-
-          {/* Breadcrumb */}
-          <div style={{ position: 'absolute', top: '20px', left: '24px', right: '24px', maxWidth: '1200px', margin: '0 auto', display: 'flex', gap: '8px', fontSize: '13px' }}>
-            <span onClick={() => navigate('/')} style={{ color: 'rgba(255,255,255,0.65)', cursor: 'pointer' }}>{t('nav.home')}</span>
-            <span style={{ color: 'rgba(255,255,255,0.4)' }}>{isRTL ? '‹' : '›'}</span>
-            <span onClick={() => navigate('/vendors')} style={{ color: 'rgba(255,255,255,0.65)', cursor: 'pointer' }}>{t('nav.vendors')}</span>
-            <span style={{ color: 'rgba(255,255,255,0.4)' }}>{isRTL ? '‹' : '›'}</span>
-            <span style={{ color: '#fff', fontWeight: '600' }}>{vendor.store_name}</span>
-          </div>
-        </div>
-
-        {/* Profile card — logo overlaps cover, text sits below on white area */}
-        <div style={{ maxWidth: '1200px', margin: '0 auto', padding: '0 24px' }}>
-          {/* Logo overlapping cover bottom */}
-          <div style={{
-            marginTop: '-60px', position: 'relative', zIndex: 10,
-            width: '120px', height: '120px', borderRadius: '50%',
-            border: '4px solid #F7F2E8',
-            backgroundColor: vendor.logo_url ? '#fff' : '#2D4A1E',
-            overflow: 'hidden', boxShadow: '0 4px 20px rgba(0,0,0,0.2)',
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
-            fontWeight: '700', fontSize: '32px', color: '#F7F2E8',
-          }}>
-            {vendor.logo_url
-              ? <img src={vendor.logo_url} alt={vendor.store_name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-              : vendor.store_name.slice(0, 2).toUpperCase()}
-          </div>
-
-          {/* Store info — fully below cover on F7F2E8 background, dark text reads cleanly */}
-          <div style={{ marginTop: '14px', paddingBottom: '8px' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap', marginBottom: '6px' }}>
-              <h1 style={{ fontFamily: 'Georgia, serif', fontSize: '28px', fontWeight: '700', color: '#1A2E0E', margin: 0 }}>
-                {vendor.store_name}
-              </h1>
-              {vendor.verified && (
-                <span style={{ backgroundColor: '#EBF2DE', color: '#2D4A1E', fontSize: '11px', fontWeight: '700', padding: '3px 10px', borderRadius: '20px', letterSpacing: '0.05em' }}>
-                  ✓ {t('vendors.verified')}
-                </span>
-              )}
-            </div>
-            {vendor.description && (
-              <p style={{ fontSize: '15px', color: '#4a5a3e', margin: '0 0 10px', lineHeight: 1.5, maxWidth: '780px' }}>
-                {vendor.description}
-              </p>
-            )}
-            <div style={{ display: 'flex', gap: '14px', fontSize: '13px', color: '#7a8a6e', flexWrap: 'wrap', alignItems: 'center', rowGap: '10px' }}>
-              {vendor.location && <span>📍 {vendor.location}</span>}
-              <span>🗓 Since {new Date(vendor.joined_at).getFullYear()}</span>
-              {vendor.phone && (
-                <a href={`tel:${vendor.phone}`} style={{ color: '#5C8A2E', fontWeight: '600', textDecoration: 'none' }}>
-                  📞 {vendor.phone}
-                </a>
-              )}
-              {vendor.whatsapp && (
-                <a href={`https://wa.me/${vendor.whatsapp.replace(/\D/g, '')}`} target="_blank" rel="noopener noreferrer"
-                  style={{ backgroundColor: '#25D366', color: '#fff', fontSize: '12px', fontWeight: '700', padding: '4px 10px', borderRadius: '20px', textDecoration: 'none' }}>
-                  WhatsApp
-                </a>
-              )}
-              {vendor.website && (
-                <a href={vendor.website} target="_blank" rel="noopener noreferrer" style={{ color: '#5C8A2E', fontWeight: '600', textDecoration: 'none' }}>
-                  🌐 Website
-                </a>
-              )}
-
-              {/* Social links inline with the meta row so they sit beside WhatsApp/Website */}
-              {allSocialLinks.length > 0 && (
-                <span style={{ display: 'inline-flex', gap: '8px', marginLeft: 'auto' }}>
-                  {allSocialLinks.map(sl => {
-                    const Icon = PlatformIcon[sl.platform] || PlatformIcon.instagram
-                    return (
-                      <a key={sl.href} href={sl.href} target="_blank" rel="noopener noreferrer" title={sl.label} style={{
-                        width: '32px', height: '32px', borderRadius: '50%', backgroundColor: '#EBF2DE',
-                        display: 'flex', alignItems: 'center', justifyContent: 'center',
-                        color: '#2D4A1E',
-                        textDecoration: 'none', transition: 'all 0.2s', border: '1.5px solid #c8d8a8',
-                      }}
-                        onMouseEnter={e => { e.currentTarget.style.backgroundColor = '#2D4A1E'; e.currentTarget.style.color = '#fff' }}
-                        onMouseLeave={e => { e.currentTarget.style.backgroundColor = '#EBF2DE'; e.currentTarget.style.color = '#2D4A1E' }}
-                      >
-                        <Icon size={16} />
-                      </a>
-                    )
-                  })}
-                </span>
-              )}
-            </div>
-          </div>
-        </div>
+    <div className="grid gap-5">
+      <div className="flex flex-wrap items-center gap-3">
+        <Input type="search" value={search} onChange={e => { setSearch(e.target.value); setPage(1) }} placeholder={t('vendors.searchStore')} aria-label={t('vendors.searchStore')} startIcon={<Search />} className="sm:w-72" />
+        <Select value={sort} onChange={e => { setSort(e.target.value as ProductSort); setPage(1) }} aria-label={t('shop.sort')} className="h-11 w-auto">
+          {SORTS.map(s => <option key={s} value={s}>{t(SORT_LABELS[s])}</option>)}
+        </Select>
       </div>
-
-      {/* ── Stats Row ─────────────────────────────────────────────────────── */}
-      <div style={{ maxWidth: '1200px', margin: '20px auto 0', padding: '0 24px' }}>
-        <div style={{ display: 'grid', gridTemplateColumns: isMobile ? 'repeat(2, 1fr)' : 'repeat(4, 1fr)', gap: '12px', marginBottom: '32px' }}>
-          {[
-            { icon: '⭐', label: t('shop.sortPopular'), val: `${Number(vendor.rating).toFixed(1)}`, sub: `${vendor.total_reviews}` },
-            { icon: '🛍️', label: t('checkout.title'), val: String(vendor.total_sales), sub: '' },
-            { icon: '📦', label: t('vendors.products'), val: String(products.length), sub: '' },
-            { icon: '📅', label: '', val: String(new Date(vendor.joined_at).getFullYear()), sub: new Date(vendor.joined_at).toLocaleDateString(isRTL ? 'ar' : 'en', { month: 'long' }) },
-          ].map(s => (
-            <div key={s.label} style={{
-              backgroundColor: '#fff', borderRadius: '14px', border: '1.5px solid #e0dbd0',
-              padding: '16px 18px', boxShadow: '0 2px 12px rgba(0,0,0,0.04)',
-            }}>
-              <div style={{ fontSize: '20px', marginBottom: '6px' }}>{s.icon}</div>
-              <div style={{ fontSize: '22px', fontWeight: '700', color: '#1A2E0E', fontFamily: 'Georgia, serif' }}>{s.val}</div>
-              <div style={{ fontSize: '12px', color: '#7a8a6e', marginTop: '2px' }}>{s.sub}</div>
-            </div>
-          ))}
-        </div>
-
-        {/* ── Search + Filter + Sort ────────────────────────────────────── */}
-        <div style={{ display: 'flex', gap: '12px', alignItems: 'center', flexWrap: 'wrap', marginBottom: '16px' }}>
-          <div style={{ flex: 1, minWidth: '200px', position: 'relative' }}>
-            <span style={{ position: 'absolute', [isRTL ? 'right' : 'left']: '12px', top: '50%', transform: 'translateY(-50%)', color: '#7a8a6e', fontSize: '14px', pointerEvents: 'none' } as React.CSSProperties}>🔍</span>
-            <input
-              type="text"
-              value={search}
-              onChange={e => setSearch(e.target.value)}
-              placeholder={`${t('common.search')} ${vendor.store_name}...`}
-              style={{ width: '100%', padding: isRTL ? '10px 36px 10px 14px' : '10px 14px 10px 36px', borderRadius: '10px', border: '1.5px solid #e0dbd0', fontSize: '14px', color: '#1A2E0E', outline: 'none', boxSizing: 'border-box', backgroundColor: '#fff' }}
-              onFocus={e => e.currentTarget.style.borderColor = '#5C8A2E'}
-              onBlur={e => e.currentTarget.style.borderColor = '#e0dbd0'}
-            />
-          </div>
-          <select
-            value={sort}
-            onChange={e => setSort(e.target.value as SortOption)}
-            style={{ padding: '10px 14px', borderRadius: '10px', border: '1.5px solid #e0dbd0', fontSize: '14px', color: '#1A2E0E', backgroundColor: '#fff', outline: 'none', cursor: 'pointer' }}
-          >
-            <option value="newest">{t('shop.sortNewest')}</option>
-            <option value="price-asc">{t('shop.sortPriceAsc')}</option>
-            <option value="price-desc">{t('shop.sortPriceDesc')}</option>
-            <option value="popular">{t('shop.sortPopular')}</option>
-          </select>
-        </div>
-
-        {/* Category pills */}
-        {categories.length > 1 && (
-          <div style={{ display: 'flex', gap: '8px', overflowX: 'auto', paddingBottom: '4px', marginBottom: '20px' }}>
-            <button
-              onClick={() => setActiveCategory('all')}
-              style={{
-                padding: '6px 16px', borderRadius: '20px', fontSize: '13px', fontWeight: '600',
-                cursor: 'pointer', whiteSpace: 'nowrap', flexShrink: 0,
-                backgroundColor: activeCategory === 'all' ? '#2D4A1E' : '#fff',
-                color: activeCategory === 'all' ? '#fff' : '#4a5a3e',
-                border: `1.5px solid ${activeCategory === 'all' ? '#2D4A1E' : '#e0dbd0'}`,
-              }}
-            >
-              {t('shop.allCategories')} ({products.length})
-            </button>
-            {categories.map(cat => (
-              <button
-                key={cat.id}
-                onClick={() => setActiveCategory(cat.id)}
-                style={{
-                  padding: '6px 16px', borderRadius: '20px', fontSize: '13px', fontWeight: '600',
-                  cursor: 'pointer', whiteSpace: 'nowrap', flexShrink: 0,
-                  backgroundColor: activeCategory === cat.id ? '#2D4A1E' : '#fff',
-                  color: activeCategory === cat.id ? '#fff' : '#4a5a3e',
-                  border: `1.5px solid ${activeCategory === cat.id ? '#2D4A1E' : '#e0dbd0'}`,
-                }}
-              >
-                {cat.name}
-              </button>
-            ))}
-          </div>
-        )}
-
-        {/* ── Products Grid ──────────────────────────────────────────────── */}
-        <div style={{ marginBottom: '60px' }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: '20px' }}>
-            <h2 style={{ fontSize: '20px', fontWeight: '700', color: '#1A2E0E', fontFamily: 'Georgia, serif', margin: 0 }}>
-              {t('vendors.products')}
-            </h2>
-            <span style={{ fontSize: '13px', color: '#7a8a6e' }}>
-              {filteredProducts.length} {filteredProducts.length !== products.length ? `of ${products.length}` : ''} listing{filteredProducts.length !== 1 ? 's' : ''}
-            </span>
-          </div>
-
-          {filteredProducts.length === 0 ? (
-            <EmptyState icon="🔍" title="No products found" message={search ? `No results for "${search}"` : 'No products in this category yet.'} />
-          ) : (
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: '18px' }}>
-              {filteredProducts.map((product) => {
-                const primaryImage = product.product_images?.find(img => img.is_primary)?.image_url
-                  || product.product_images?.[0]?.image_url || product.primary_image
-                const discount = product.compare_price && product.compare_price > product.price
-                  ? Math.round(100 - (product.price / product.compare_price) * 100)
-                  : 0
-                const inStock = product.stock > 0
-
-                return (
-                  <div
-                    key={product.id}
-                    onClick={() => navigate(`/product/${product.slug}`)}
-                    style={{
-                      backgroundColor: '#fff', border: '1.5px solid #e0dbd0',
-                      borderRadius: '16px', overflow: 'hidden',
-                      cursor: 'pointer', transition: 'all 0.2s',
-                      boxShadow: '0 2px 10px rgba(0,0,0,0.04)',
-                    }}
-                    onMouseEnter={e => {
-                      e.currentTarget.style.transform = 'translateY(-5px)'
-                      e.currentTarget.style.boxShadow = '0 10px 32px rgba(0,0,0,0.1)'
-                      e.currentTarget.style.borderColor = '#5C8A2E'
-                    }}
-                    onMouseLeave={e => {
-                      e.currentTarget.style.transform = 'translateY(0)'
-                      e.currentTarget.style.boxShadow = '0 2px 10px rgba(0,0,0,0.04)'
-                      e.currentTarget.style.borderColor = '#e0dbd0'
-                    }}
-                  >
-                    {/* Image */}
-                    <div style={{ height: '190px', backgroundColor: '#EBF2DE', position: 'relative', overflow: 'hidden' }}>
-                      {primaryImage
-                        ? <img src={primaryImage} alt={product.name} style={{ width: '100%', height: '100%', objectFit: 'cover', transition: 'transform 0.3s' }}
-                          onMouseEnter={e => e.currentTarget.style.transform = 'scale(1.05)'}
-                          onMouseLeave={e => e.currentTarget.style.transform = 'scale(1)'}
-                        />
-                        : <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', fontSize: '56px' }}>🛍️</div>}
-
-                      {/* Badges */}
-                      <div style={{ position: 'absolute', top: '8px', left: '8px', display: 'flex', gap: '4px', flexWrap: 'wrap' }}>
-                        {discount > 0 && (
-                          <span style={{ backgroundColor: '#ef4444', color: '#fff', fontSize: '11px', fontWeight: '700', padding: '3px 8px', borderRadius: '6px' }}>
-                            -{discount}%
-                          </span>
-                        )}
-                        {!inStock && (
-                          <span style={{ backgroundColor: 'rgba(0,0,0,0.6)', color: '#fff', fontSize: '11px', fontWeight: '700', padding: '3px 8px', borderRadius: '6px' }}>
-                            Out of Stock
-                          </span>
-                        )}
-                      </div>
-                    </div>
-
-                    {/* Info */}
-                    <div style={{ padding: '14px' }}>
-                      <h3 style={{ fontSize: '14px', fontWeight: '600', color: '#1A2E0E', marginBottom: '6px', lineHeight: '1.3', fontFamily: 'Georgia, serif', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' } as React.CSSProperties}>
-                        {product.name}
-                      </h3>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '10px' }}>
-                        <Stars rating={Number(product.rating)} />
-                        <span style={{ fontSize: '12px', color: '#7a8a6e' }}>({product.total_reviews})</span>
-                      </div>
-                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                        <div>
-                          <span style={{ fontSize: '18px', fontWeight: '700', color: '#1A2E0E', fontFamily: 'Georgia, serif' }}>
-                            ${Number(product.price).toFixed(2)}
-                          </span>
-                          {product.compare_price && product.compare_price > product.price && (
-                            <span style={{ fontSize: '13px', color: '#9ca3af', textDecoration: 'line-through', marginLeft: '6px' }}>
-                              ${Number(product.compare_price).toFixed(2)}
-                            </span>
-                          )}
-                        </div>
-                        <button
-                          onClick={e => handleAddToCart(e, product)}
-                          disabled={!inStock}
-                          style={{
-                            backgroundColor: addedId === product.id ? '#5C8A2E' : inStock ? '#2D4A1E' : '#e0dbd0',
-                            color: inStock ? '#fff' : '#7a8a6e',
-                            border: 'none', borderRadius: '8px',
-                            padding: '7px 14px', fontSize: '12px', fontWeight: '600',
-                            cursor: inStock ? 'pointer' : 'not-allowed',
-                            transition: 'all 0.2s', minWidth: '72px',
-                          }}
-                        >
-                          {addedId === product.id ? '✓ Added' : inStock ? '+ Cart' : 'Sold Out'}
-                        </button>
-                      </div>
-                    </div>
-                  </div>
-                )
-              })}
-            </div>
-          )}
-        </div>
-
-        {/* Back */}
-        <Link to="/vendors" style={{
-          display: 'inline-block', color: '#7a8a6e', border: '1.5px solid #e0dbd0',
-          borderRadius: '8px', padding: '10px 20px', fontSize: '14px',
-          textDecoration: 'none', marginBottom: '48px', transition: 'all 0.2s',
-        }}
-          onMouseEnter={e => { e.currentTarget.style.borderColor = '#5C8A2E'; e.currentTarget.style.color = '#2D4A1E' }}
-          onMouseLeave={e => { e.currentTarget.style.borderColor = '#e0dbd0'; e.currentTarget.style.color = '#7a8a6e' }}
-        >
-          ← Back to Vendors
-        </Link>
-      </div>
+      {error ? <ErrorState onRetry={reload} /> : !loading && !data?.data.length
+        ? <EmptyState icon={<Store />} title={search ? t('shop.empty') : t('vendors.noProducts')} />
+        : <ProductGrid products={data?.data} loading={loading} skeletons={8} />}
+      {data && <Pagination page={page} total={data.total} limit={data.limit} onPageChange={setPage} />}
     </div>
   )
 }
 
-export default VendorProfilePage
+function StoreReviews({ vendorId }: { vendorId: string }) {
+  const { t, i18n } = useTranslation()
+  const [page, setPage] = useState(1)
+  const { data, loading } = useAsync(signal => reviews.forVendor(vendorId, page, signal), [vendorId, page])
+  const dateFormat = new Intl.DateTimeFormat(i18n.language, { dateStyle: 'medium' })
+  if (loading && !data) return <div className="grid gap-3">{[0, 1].map(i => <Skeleton key={i} className="h-24 rounded-lg" />)}</div>
+  if (!data?.data.length) return <EmptyState icon={<MessageSquare />} title={t('vendors.noReviews')} className="py-10" />
+  return (
+    <div className="grid max-w-3xl gap-4">
+      <ul className="grid gap-4">
+        {data.data.map(review => (
+          <li key={review.id} className="grid gap-2 border-b border-border pb-4 last:border-0">
+            <div className="flex flex-wrap items-center gap-3">
+              <Avatar name={review.author_name} size="sm" />
+              <div className="grid">
+                <span className="text-sm font-semibold">{review.author_name}</span>
+                <span className="text-xs text-fg-subtle">
+                  {dateFormat.format(new Date(review.created_at))}
+                  {review.product_name && <> · {t('vendors.reviewOn', { product: review.product_name })}</>}
+                </span>
+              </div>
+              <Rating value={review.rating} size={14} className="ms-auto" />
+            </div>
+            {review.title && <p className="font-semibold">{review.title}</p>}
+            {review.body && <p className="text-sm text-fg-muted">{review.body}</p>}
+          </li>
+        ))}
+      </ul>
+      <Pagination page={page} total={data.total} limit={data.limit} onPageChange={setPage} />
+    </div>
+  )
+}
+
+export default function VendorProfilePage() {
+  const { slug = '' } = useParams()
+  const { t, i18n } = useTranslation()
+  const navigate = useNavigate()
+  const { data: vendor, loading, error, reload } = useAsync(signal => catalog.vendor(slug, signal), [slug])
+  usePageTitle(vendor?.store_name ?? (loading ? undefined : t('vendors.notFound')))
+  const links = useMemo(() => (vendor ? socialLinks(vendor) : []), [vendor])
+
+  if (loading) {
+    return (
+      <div>
+        <Skeleton className="h-40 rounded-none sm:h-56" />
+        <Container className="grid gap-3 py-6"><Skeleton className="size-24 rounded-xl" /><Skeleton className="h-8 w-60" /></Container>
+      </div>
+    )
+  }
+  if (error) return <Container className="py-16"><ErrorState onRetry={reload} /></Container>
+  if (!vendor) {
+    return <Container className="py-16"><EmptyState icon={<Store />} title={t('vendors.notFound')} message={t('vendors.notFoundText')} action={() => navigate('/vendors')} actionLabel={t('vendors.title')} /></Container>
+  }
+
+  const website = safeExternalUrl(vendor.website)
+  const whatsapp = vendor.whatsapp?.replace(/\D/g, '')
+  const joined = new Intl.DateTimeFormat(i18n.language, { month: 'long', year: 'numeric' }).format(new Date(vendor.joined_at))
+
+  return (
+    <div>
+      <div className="h-40 bg-gradient-to-br from-brand-200 via-brand-400 to-brand-700 sm:h-56 dark:from-brand-900 dark:via-brand-800 dark:to-brand-950">
+        {vendor.cover_url && <img src={vendor.cover_url} alt="" className="size-full object-cover" />}
+      </div>
+      <Container className="grid gap-6 pb-10">
+        <div className="-mt-12 flex flex-wrap items-end gap-4 sm:-mt-14">
+          <Avatar name={vendor.store_name} src={vendor.logo_url} size="xl" shape="square" className="size-24 border-4 border-bg shadow-md sm:size-28" />
+          <div className="grid min-w-0 flex-1 gap-1 pb-1">
+            <h1 className="flex items-center gap-2 text-3xl font-semibold">
+              <span className="truncate">{vendor.store_name}</span>
+              {vendor.verified && <BadgeCheck aria-label={t('vendors.verified')} className="size-6 shrink-0 text-primary" />}
+            </h1>
+            <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-fg-muted">
+              {vendor.total_reviews > 0 && <Rating value={vendor.rating} count={vendor.total_reviews} showValue size={14} />}
+              {vendor.location && <span className="inline-flex items-center gap-1"><MapPin aria-hidden className="size-4" />{vendor.location}</span>}
+              <span className="inline-flex items-center gap-1"><CalendarDays aria-hidden className="size-4" />{t('vendors.joined', { date: joined })}</span>
+            </div>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            {whatsapp && (
+              <Button asChild variant="accent" startIcon={<MessageCircle />}>
+                <a href={`https://wa.me/${whatsapp}`} target="_blank" rel="noopener noreferrer">{t('vendors.whatsapp')}</a>
+              </Button>
+            )}
+            {website && (
+              <Button asChild variant="outline" startIcon={<Globe />}>
+                <a href={website} target="_blank" rel="noopener noreferrer">{t('vendors.website')}</a>
+              </Button>
+            )}
+          </div>
+        </div>
+
+        <Breadcrumbs items={[{ label: t('product.home'), to: '/' }, { label: t('vendors.title'), to: '/vendors' }, { label: vendor.store_name }]} />
+
+        <Tabs defaultValue="products">
+          <TabsList>
+            <TabsTrigger value="products">{t('vendors.products')}</TabsTrigger>
+            <TabsTrigger value="about">{t('vendors.about')}</TabsTrigger>
+            <TabsTrigger value="reviews">{t('vendors.reviews')}{vendor.total_reviews ? ` (${vendor.total_reviews})` : ''}</TabsTrigger>
+          </TabsList>
+          <TabsContent value="products"><StoreProducts vendorId={vendor.id} /></TabsContent>
+          <TabsContent value="about">
+            <div className="grid max-w-3xl gap-6 md:grid-cols-[1fr_16rem]">
+              <p className="whitespace-pre-line text-fg-muted">{vendor.description || t('vendors.noDescription')}</p>
+              <dl className="grid content-start gap-3 rounded-lg bg-surface-muted p-4 text-sm">
+                {vendor.location && <div><dt className="font-semibold">{t('vendors.location')}</dt><dd className="text-fg-muted">{vendor.address || vendor.location}</dd></div>}
+                {vendor.phone && <div><dt className="font-semibold">{t('vendors.contact')}</dt><dd className="inline-flex items-center gap-1.5 text-fg-muted"><Phone aria-hidden className="size-3.5" /><bdi>{vendor.phone}</bdi></dd></div>}
+                {links.length > 0 && (
+                  <div className="flex flex-wrap gap-2 pt-1">
+                    {links.map(link => (
+                        <a key={link.platform} href={link.href} target="_blank" rel="noopener noreferrer" aria-label={link.label}
+                          className="inline-flex size-9 items-center justify-center rounded-full border border-border bg-surface text-fg-muted hover:text-fg">
+                          <PlatformIcon platform={link.platform} size={16} fallback={link.label[0]} />
+                        </a>
+                    ))}
+                  </div>
+                )}
+              </dl>
+            </div>
+          </TabsContent>
+          <TabsContent value="reviews"><StoreReviews vendorId={vendor.id} /></TabsContent>
+        </Tabs>
+      </Container>
+    </div>
+  )
+}

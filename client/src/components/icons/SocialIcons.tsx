@@ -51,8 +51,7 @@ export function WhatsAppIcon({ size = 18, color }: IconProps) {
   ))
 }
 
-// Lookup by platform key — used by VendorProfilePage to render dynamic links.
-export const PlatformIcon: Record<string, React.ComponentType<IconProps>> = {
+const PLATFORM_ICONS: Record<string, (props: IconProps) => React.ReactElement> = {
   instagram: InstagramIcon,
   facebook:  FacebookIcon,
   tiktok:    TikTokIcon,
@@ -61,4 +60,9 @@ export const PlatformIcon: Record<string, React.ComponentType<IconProps>> = {
   x:         XIcon,
   linkedin:  LinkedInIcon,
   whatsapp:  WhatsAppIcon,
+}
+
+export function PlatformIcon({ platform, fallback, ...props }: IconProps & { platform: string; fallback?: React.ReactNode }) {
+  const Icon = PLATFORM_ICONS[platform]
+  return Icon ? <Icon {...props} /> : <>{fallback}</>
 }

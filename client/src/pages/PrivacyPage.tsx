@@ -1,7 +1,9 @@
-function PrivacyPage() {
-  document.title = 'Privacy Policy | SouqNa'
+import { useTranslation } from 'react-i18next'
+import { LegalPage, type LegalSection } from '../components/layout/LegalPage'
 
-  const sections = [
+export default function PrivacyPage() {
+  const { t } = useTranslation()
+  const sections: LegalSection[] = [
     {
       title: '1. Information We Collect',
       content: `We collect information you provide directly to us when you create an account, make a purchase, or contact us for support. This includes:\n\n• Personal information (name, email address, phone number)\n• Billing and shipping address\n• Payment information (processed securely; we do not store full card numbers)\n• Profile information and preferences\n• Communications with vendors and our support team\n\nWe also collect information automatically when you use our platform, including browser type, IP address, pages visited, and time spent on our site.`,
@@ -39,37 +41,5 @@ function PrivacyPage() {
       content: `If you have any questions about this Privacy Policy, please contact us:\n\nSouqNa Lebanon\nEmail: privacy@souqna.lb\nPhone: +961 1 234 567\nAddress: Beirut, Lebanon`,
     },
   ]
-
-  return (
-    <div style={{ backgroundColor: '#F7F2E8', minHeight: '100vh' }}>
-      <div style={{ backgroundColor: '#2D4A1E', padding: '48px 24px' }}>
-        <div style={{ maxWidth: '760px', margin: '0 auto' }}>
-          <h1 style={{ color: '#F7F2E8', fontFamily: 'Georgia, serif', fontSize: '36px', fontWeight: '700', marginBottom: '8px' }}>Privacy Policy</h1>
-          <p style={{ color: 'rgba(247,242,232,0.65)', fontSize: '14px' }}>Last updated: January 1, 2025</p>
-        </div>
-      </div>
-
-      <div style={{ maxWidth: '760px', margin: '0 auto', padding: '48px 24px' }}>
-        <div style={{ backgroundColor: '#EBF2DE', borderRadius: '12px', padding: '20px 24px', marginBottom: '36px', border: '1px solid #c8d8a8' }}>
-          <p style={{ fontSize: '15px', color: '#2D4A1E', lineHeight: '1.7' }}>
-            SouqNa ("we", "our", or "us") is committed to protecting your privacy. This Privacy Policy explains how we collect, use, and share information about you when you use our platform at souqna.lb and related services.
-          </p>
-        </div>
-
-        {sections.map((s, i) => (
-          <div key={i} style={{ marginBottom: '32px' }}>
-            <h2 style={{ fontFamily: 'Georgia, serif', fontSize: '20px', fontWeight: '700', color: '#1A2E0E', marginBottom: '12px' }}>
-              {s.title}
-            </h2>
-            <div style={{ fontSize: '15px', color: '#4a5a3e', lineHeight: '1.8', whiteSpace: 'pre-line' }}>
-              {s.content}
-            </div>
-            {i < sections.length - 1 && <div style={{ borderBottom: '1px solid #e0dbd0', marginTop: '28px' }} />}
-          </div>
-        ))}
-      </div>
-    </div>
-  )
+  return <LegalPage title={t('legal.privacy')} sections={sections} />
 }
-
-export default PrivacyPage

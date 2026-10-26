@@ -1,0 +1,247 @@
+/*
+ * SouQna design tokens — "Modern Levantine Souq".
+ *
+ * Two layers:
+ *  1. Palette (@theme): raw scales. Use them for illustration and one-offs.
+ *  2. Semantic roles (:root / [data-theme="dark"]): what components use.
+ *     bg-surface, text-fg, border-border, bg-primary … switch with the theme.
+ *
+ * Contrast for every text/background role pair is checked by
+ * src/styles/tokens.test.ts (WCAG AA: 4.5:1 text, 3:1 UI).
+ */
+
+/* `static` emits every variable, not only those used by utilities, so the
+   palette is available to inline styles, SVG and third-party widgets. */
+@theme static {
+  /* ── Palette ─────────────────────────────────────────────────────────── */
+  /* Olive — the brand. 800 is the original #2D4A1E, 500 the original leaf. */
+  --color-brand-50: #f3f7ec;
+  --color-brand-100: #e4edd3;
+  --color-brand-200: #cbdda9;
+  --color-brand-300: #a3c46c;
+  --color-brand-400: #84ad4a;
+  --color-brand-500: #5c8a2e;
+  --color-brand-600: #4a7225;
+  --color-brand-700: #3a5a1f;
+  --color-brand-800: #2d4a1e;
+  --color-brand-900: #22381a;
+  --color-brand-950: #121f0c;
+
+  /* Sand — warm neutrals. 100 is the original page background #F7F2E8. */
+  --color-sand-50: #fcfaf5;
+  --color-sand-100: #f7f2e8;
+  --color-sand-200: #efe7d6;
+  --color-sand-300: #e0d6bf;
+  --color-sand-400: #c9bb9b;
+  --color-sand-500: #9a8a6f;
+  --color-sand-600: #7d6f58;
+  --color-sand-700: #5e5343;
+  --color-sand-800: #403930;
+  --color-sand-900: #29251f;
+  --color-sand-950: #181612;
+
+  /* Terracotta — calls to action and highlights. */
+  --color-accent-50: #fdf3ee;
+  --color-accent-100: #fae3d6;
+  --color-accent-200: #f4c4a9;
+  --color-accent-300: #ec9e74;
+  --color-accent-400: #e27a47;
+  --color-accent-500: #c9602e;
+  --color-accent-600: #a84c23;
+  --color-accent-700: #853b1d;
+  --color-accent-800: #63301b;
+  --color-accent-900: #432113;
+
+  --color-success-50: #edf7ee;
+  --color-success-500: #2f8a3a;
+  --color-success-700: #1f5f28;
+  --color-warning-50: #fff7e6;
+  --color-warning-500: #d18b06;
+  --color-warning-700: #8a5a00;
+  --color-danger-50: #fdecec;
+  --color-danger-500: #d13b3b;
+  --color-danger-700: #a12626;
+  --color-info-50: #eaf3fc;
+  --color-info-500: #2f74c0;
+  --color-info-700: #1d5290;
+
+  --color-star: #e6a100;
+
+  /* ── Typography ─────────────────────────────────────────────────────── */
+  --font-sans: 'Inter Variable', 'IBM Plex Sans Arabic', ui-sans-serif, system-ui, sans-serif;
+  --font-display: 'Fraunces Variable', 'IBM Plex Sans Arabic', Georgia, serif;
+
+  /* Fluid scale: grows smoothly from 360px to 1280px viewports. */
+  --text-xs: 0.75rem;
+  --text-xs--line-height: 1rem;
+  --text-sm: 0.875rem;
+  --text-sm--line-height: 1.25rem;
+  --text-base: 1rem;
+  --text-base--line-height: 1.5rem;
+  --text-lg: clamp(1.0625rem, 1.02rem + 0.2vw, 1.125rem);
+  --text-lg--line-height: 1.6;
+  --text-xl: clamp(1.125rem, 1.05rem + 0.35vw, 1.25rem);
+  --text-xl--line-height: 1.5;
+  --text-2xl: clamp(1.375rem, 1.22rem + 0.7vw, 1.625rem);
+  --text-2xl--line-height: 1.3;
+  --text-3xl: clamp(1.75rem, 1.5rem + 1.1vw, 2.125rem);
+  --text-3xl--line-height: 1.2;
+  --text-4xl: clamp(2.125rem, 1.75rem + 1.7vw, 2.75rem);
+  --text-4xl--line-height: 1.12;
+  --text-5xl: clamp(2.5rem, 1.95rem + 2.6vw, 3.75rem);
+  --text-5xl--line-height: 1.05;
+
+  /* ── Shape & depth ──────────────────────────────────────────────────── */
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --radius-lg: 16px;
+  --radius-xl: 24px;
+
+  --shadow-sm: 0 1px 2px rgb(41 37 31 / 0.06), 0 1px 3px rgb(41 37 31 / 0.08);
+  --shadow-md: 0 4px 10px -2px rgb(41 37 31 / 0.08), 0 2px 4px -2px rgb(41 37 31 / 0.06);
+  --shadow-lg: 0 16px 40px -12px rgb(41 37 31 / 0.22), 0 6px 12px -6px rgb(41 37 31 / 0.1);
+
+  /* ── Motion ─────────────────────────────────────────────────────────── */
+  --ease-standard: cubic-bezier(0.2, 0, 0, 1);
+  --ease-emphasized: cubic-bezier(0.3, 0, 0, 1.3);
+  --duration-fast: 150ms;
+  --duration-base: 250ms;
+  --duration-slow: 400ms;
+
+  --animate-shimmer: shimmer 1.4s ease-in-out infinite;
+  --animate-fade-in: fade-in var(--duration-base) var(--ease-standard);
+  --animate-scale-in: scale-in var(--duration-base) var(--ease-standard);
+  --animate-slide-up: slide-up var(--duration-base) var(--ease-standard);
+
+  @keyframes shimmer {
+    from { background-position: 200% 0; }
+    to { background-position: -200% 0; }
+  }
+  @keyframes fade-in {
+    from { opacity: 0; }
+    to { opacity: 1; }
+  }
+  @keyframes scale-in {
+    from { opacity: 0; transform: scale(0.96); }
+    to { opacity: 1; transform: scale(1); }
+  }
+  @keyframes slide-up {
+    from { opacity: 0; transform: translateY(8px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+}
+
+/* ── Semantic roles ─────────────────────────────────────────────────────── */
+:root {
+  --bg: var(--color-sand-50);
+  --surface: #ffffff;
+  --surface-muted: var(--color-sand-100);
+  --surface-sunken: var(--color-sand-200);
+  --border: var(--color-sand-300);
+  --border-strong: var(--color-sand-500);
+  --fg: #1d1a15;
+  --fg-muted: var(--color-sand-700);
+  --fg-subtle: var(--color-sand-600);
+  --primary: var(--color-brand-800);
+  --primary-hover: var(--color-brand-700);
+  --primary-fg: #ffffff;
+  --primary-soft: var(--color-brand-50);
+  --primary-soft-fg: var(--color-brand-800);
+  --accent: var(--color-accent-600);
+  --accent-hover: var(--color-accent-700);
+  --accent-fg: #ffffff;
+  --accent-soft: var(--color-accent-50);
+  --accent-soft-fg: var(--color-accent-700);
+  --success: var(--color-success-700);
+  --success-soft: var(--color-success-50);
+  --warning: var(--color-warning-700);
+  --warning-soft: var(--color-warning-50);
+  --danger: var(--color-danger-700);
+  --danger-soft: var(--color-danger-50);
+  --info: var(--color-info-700);
+  --info-soft: var(--color-info-50);
+  --ring: var(--color-brand-500);
+  --overlay: rgb(24 22 18 / 0.55);
+  color-scheme: light;
+}
+
+[data-theme='dark'] {
+  --bg: #12110e;
+  --surface: #1b1915;
+  --surface-muted: #24211c;
+  --surface-sunken: #0d0c0a;
+  --border: #3a352d;
+  --border-strong: #7a705f;
+  --fg: #f3eee4;
+  --fg-muted: #c4b9a5;
+  --fg-subtle: #a69a85;
+  --primary: var(--color-brand-300);
+  --primary-hover: var(--color-brand-200);
+  --primary-fg: var(--color-brand-950);
+  --primary-soft: #223018;
+  --primary-soft-fg: var(--color-brand-200);
+  --accent: var(--color-accent-400);
+  --accent-hover: var(--color-accent-300);
+  --accent-fg: #1d0f08;
+  --accent-soft: #3a2318;
+  --accent-soft-fg: var(--color-accent-200);
+  --success: #7cc98a;
+  --success-soft: #16301b;
+  --warning: #f0b847;
+  --warning-soft: #33270c;
+  --danger: #f08a8a;
+  --danger-soft: #3a1717;
+  --info: #8bbcef;
+  --info-soft: #14283f;
+  --ring: var(--color-brand-300);
+  --overlay: rgb(0 0 0 / 0.7);
+  color-scheme: dark;
+}
+
+@theme inline {
+  --color-bg: var(--bg);
+  --color-surface: var(--surface);
+  --color-surface-muted: var(--surface-muted);
+  --color-surface-sunken: var(--surface-sunken);
+  --color-border: var(--border);
+  --color-border-strong: var(--border-strong);
+  --color-fg: var(--fg);
+  --color-fg-muted: var(--fg-muted);
+  --color-fg-subtle: var(--fg-subtle);
+  --color-primary: var(--primary);
+  --color-primary-hover: var(--primary-hover);
+  --color-primary-fg: var(--primary-fg);
+  --color-primary-soft: var(--primary-soft);
+  --color-primary-soft-fg: var(--primary-soft-fg);
+  --color-accent: var(--accent);
+  --color-accent-hover: var(--accent-hover);
+  --color-accent-fg: var(--accent-fg);
+  --color-accent-soft: var(--accent-soft);
+  --color-accent-soft-fg: var(--accent-soft-fg);
+  --color-success: var(--success);
+  --color-success-soft: var(--success-soft);
+  --color-warning: var(--warning);
+  --color-warning-soft: var(--warning-soft);
+  --color-danger: var(--danger);
+  --color-danger-soft: var(--danger-soft);
+  --color-info: var(--info);
+  --color-info-soft: var(--info-soft);
+  --color-ring: var(--ring);
+  --color-overlay: var(--overlay);
+}
+
+/* Arabic: Plex Sans Arabic for body and headings (no Arabic serif pairing). */
+html[lang='ar'] {
+  --font-sans: 'IBM Plex Sans Arabic', 'Inter Variable', ui-sans-serif, system-ui, sans-serif;
+  --font-display: 'IBM Plex Sans Arabic', 'Fraunces Variable', Georgia, serif;
+}
+
+@keyframes sheet-from-start {
+  from { transform: translateX(-100%); }
+}
+@keyframes sheet-from-end {
+  from { transform: translateX(100%); }
+}
+@keyframes sheet-from-bottom {
+  from { transform: translateY(100%); }
+}

@@ -1,276 +1,273 @@
-import { useState } from 'react'
-import { useParams, useNavigate, Link } from 'react-router-dom'
+import { useEffect, useState, type FormEvent } from 'react'
+import { Link, useParams } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
+import { Banknote, Check, CircleCheckBig, MapPin, Pencil, ShoppingBag } from 'lucide-react'
+import {
+  Breadcrumbs, Button, Checkbox, EmptyState, FormField, Input, RadioGroup, RadioItem, Skeleton, Textarea, formatPrice,
+} from '../components/ui'
+import { Container } from '../components/layout/Container'
+import { addresses as addressApi, orders, type Address, type OrderDetail } from '../api/account'
+import { useAsync } from '../hooks/useAsync'
+import { usePageTitle } from '../hooks/usePageTitle'
 import { useCartStore } from '../store/cartStore'
-import { apiFetch } from '../lib/api'
-import { Spinner } from '../components/ui'
-import { useIsMobile } from '../hooks/useMediaQuery'
+import { useAuthStore } from '../store/authStore'
+import { cn } from '../lib/utils'
 
-const inputStyle: React.CSSProperties = {
-  width: '100%', padding: '11px 14px', borderRadius: '8px',
-  border: '1.5px solid #e0dbd0', fontSize: '14px', color: '#1A2E0E',
-  outline: 'none', boxSizing: 'border-box', fontFamily: 'inherit', backgroundColor: '#fff',
-}
-const labelStyle: React.CSSProperties = {
-  display: 'block', fontSize: '13px', fontWeight: '600', color: '#1A2E0E', marginBottom: '6px',
-}
+const DELIVERY_FEE = 3.5
+const PHONE = /^\+?[\d\s()-]{6,30}$/
+type Step = 0 | 1 | 2
 
-function CheckoutPage() {
-  const { vendorId } = useParams<{ vendorId: string }>()
-  const navigate = useNavigate()
-  const { t, i18n } = useTranslation()
-  const isRTL = i18n.language?.startsWith('ar')
-  const { getVendorCart, clearVendorCart } = useCartStore()
-  const cart = vendorId ? getVendorCart(vendorId) : undefined
+interface NewAddress { fullName: string; phone: string; line1: string; city: string }
 
-  const PAYMENT_OPTIONS = [
-    { id: 'cash_delivery', label: t('checkout.cashOnDelivery'), icon: '💵', info: '' },
-  ]
-
-  const [form, setForm] = useState({
-    name: '', address: '', city: '', phone: '', note: '',
-  })
-  const [paymentMethod, setPaymentMethod] = useState('cash_delivery')
-  const [submitting, setSubmitting] = useState(false)
-  const [error, setError] = useState('')
-  const [orderNumber, setOrderNumber] = useState('')
-  const isMobile = useIsMobile()
-
-  if (!cart || cart.items.length === 0) {
-    return (
-      <div style={{ backgroundColor: '#F7F2E8', minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '24px' }} dir={isRTL ? 'rtl' : 'ltr'}>
-        <div style={{ textAlign: 'center' }}>
-          <div style={{ fontSize: '56px', marginBottom: '16px' }}>🛒</div>
-          <h2 style={{ fontFamily: 'Georgia, serif', fontSize: '24px', color: '#1A2E0E', marginBottom: '12px' }}>
-            {t('cart.empty')}
-          </h2>
-          <Link to="/cart" style={{ color: '#5C8A2E', fontWeight: '600', fontSize: '15px' }}>
-            {isRTL ? '→' : '←'} {t('cart.title')}
-          </Link>
-        </div>
-      </div>
-    )
-  }
-
-  const subtotal = cart.items.reduce((s, i) => s + i.product.price * i.quantity, 0)
-  const shipping = 3.5
-  const total = subtotal + shipping
-
-  if (orderNumber) {
-    return (
-      <div style={{ backgroundColor: '#F7F2E8', minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '24px' }} dir={isRTL ? 'rtl' : 'ltr'}>
-        <div style={{ maxWidth: '480px', width: '100%', textAlign: 'center', backgroundColor: '#fff', borderRadius: '20px', padding: '48px 32px', border: '1.5px solid #e0dbd0' }}>
-          <div style={{ fontSize: '64px', marginBottom: '16px' }}>✅</div>
-          <h2 style={{ fontFamily: 'Georgia, serif', fontSize: '26px', color: '#1A2E0E', marginBottom: '12px' }}>
-            {t('checkout.orderConfirmed')}
-          </h2>
-          <div style={{ backgroundColor: '#EBF2DE', borderRadius: '12px', padding: '16px', marginBottom: '24px' }}>
-            <p style={{ fontSize: '14px', color: '#5C8A2E', fontWeight: '700', margin: 0 }}>
-              {t('checkout.orderNumber')}{orderNumber}
-            </p>
-          </div>
-          <button onClick={() => navigate('/shop')} style={{
-            width: '100%', backgroundColor: '#2D4A1E', color: '#fff', border: 'none',
-            borderRadius: '10px', padding: '14px', fontSize: '15px', fontWeight: '600', cursor: 'pointer', marginBottom: '12px',
-          }}>
-            {t('cart.startShopping')}
-          </button>
-          <button onClick={() => navigate('/dashboard')} style={{
-            width: '100%', backgroundColor: 'transparent', color: '#7a8a6e', border: '1.5px solid #e0dbd0',
-            borderRadius: '10px', padding: '12px', fontSize: '14px', cursor: 'pointer',
-          }}>
-            {t('nav.dashboard')}
-          </button>
-        </div>
-      </div>
-    )
-  }
-
-  const handleSubmit = async () => {
-    if (!form.name || !form.address || !form.city || !form.phone) {
-      setError(t('common.loading'))
-      return
-    }
-    setSubmitting(true)
-    setError('')
-    try {
-      const res = await apiFetch<{ data: { order_number: string } }>('/api/orders', {
-        method: 'POST',
-        body: JSON.stringify({
-          cartItems: cart.items.map(i => ({
-            product_id: i.product_id,
-            variant_id: i.variant_id,
-            quantity: i.quantity,
-          })),
-          shippingInfo: {
-            shipping_name: form.name,
-            shipping_address: form.address,
-            shipping_city: form.city,
-            shipping_phone: form.phone,
-            customer_note: form.note,
-            payment_method: paymentMethod,
-          },
-        }),
-      })
-      clearVendorCart(vendorId!)
-      setOrderNumber(res.data.order_number)
-    } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : 'Order failed. Please try again.')
-    } finally {
-      setSubmitting(false)
-    }
-  }
-
+function Stepper({ step }: { step: Step }) {
+  const { t } = useTranslation()
+  const labels = [t('checkout.stepAddress'), t('checkout.stepPayment'), t('checkout.stepReview')]
   return (
-    <div style={{ backgroundColor: '#F7F2E8', minHeight: '100vh' }} dir={isRTL ? 'rtl' : 'ltr'}>
-      {/* Header */}
-      <div style={{ backgroundColor: '#2D4A1E', padding: '28px 24px' }}>
-        <div style={{ maxWidth: '960px', margin: '0 auto' }}>
-          <Link to="/cart" style={{ color: 'rgba(255,255,255,0.7)', fontSize: '13px', textDecoration: 'none', fontWeight: '600' }}>
-            {isRTL ? '→' : '←'} {t('cart.title')}
-          </Link>
-          <h1 style={{ color: '#F7F2E8', fontFamily: 'Georgia, serif', fontSize: '26px', fontWeight: '700', marginTop: '8px', marginBottom: '2px' }}>
-            {t('checkout.title')}
-          </h1>
-          <p style={{ color: 'rgba(247,242,232,0.65)', fontSize: '13px' }}>
-            <strong style={{ color: '#A3C46C' }}>{cart.vendorName}</strong>
-          </p>
-        </div>
-      </div>
-
-      <div style={{ maxWidth: '960px', margin: '0 auto', padding: '32px 24px' }}>
-        <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 340px', gap: '28px', alignItems: 'start' }}>
-
-          {/* Left: Form */}
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
-
-            {/* Shipping */}
-            <div style={{ backgroundColor: '#fff', borderRadius: '16px', border: '1.5px solid #e0dbd0', padding: '24px' }}>
-              <h2 style={{ fontFamily: 'Georgia, serif', fontSize: '18px', color: '#1A2E0E', marginBottom: '20px' }}>
-                {t('checkout.shippingInfo')}
-              </h2>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
-                <div>
-                  <label style={labelStyle}>{t('checkout.fullName')} *</label>
-                  <input value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} placeholder={t('checkout.fullName')} style={inputStyle} />
-                </div>
-                <div>
-                  <label style={labelStyle}>{t('checkout.address')} *</label>
-                  <input value={form.address} onChange={e => setForm({ ...form, address: e.target.value })} placeholder={t('checkout.address')} style={inputStyle} />
-                </div>
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
-                  <div>
-                    <label style={labelStyle}>{t('checkout.city')} *</label>
-                    <input value={form.city} onChange={e => setForm({ ...form, city: e.target.value })} placeholder={t('checkout.city')} style={inputStyle} />
-                  </div>
-                  <div>
-                    <label style={labelStyle}>{t('checkout.phone')} *</label>
-                    <input value={form.phone} onChange={e => setForm({ ...form, phone: e.target.value })} placeholder="+961..." style={inputStyle} />
-                  </div>
-                </div>
-                <div>
-                  <label style={labelStyle}>{t('checkout.notes')}</label>
-                  <textarea value={form.note} onChange={e => setForm({ ...form, note: e.target.value })} placeholder={t('checkout.notes')} rows={2} style={{ ...inputStyle, resize: 'vertical' }} />
-                </div>
-              </div>
-            </div>
-
-            {/* Payment */}
-            <div style={{ backgroundColor: '#fff', borderRadius: '16px', border: '1.5px solid #e0dbd0', padding: '24px' }}>
-              <h2 style={{ fontFamily: 'Georgia, serif', fontSize: '18px', color: '#1A2E0E', marginBottom: '20px' }}>
-                {t('checkout.paymentMethod')}
-              </h2>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-                {PAYMENT_OPTIONS.map(opt => (
-                  <div
-                    key={opt.id}
-                    onClick={() => setPaymentMethod(opt.id)}
-                    style={{
-                      padding: '14px 16px', borderRadius: '10px',
-                      border: `2px solid ${paymentMethod === opt.id ? '#2D4A1E' : '#e0dbd0'}`,
-                      cursor: 'pointer', display: 'flex', gap: '12px', alignItems: 'center',
-                      backgroundColor: paymentMethod === opt.id ? '#f8faf5' : '#fff', transition: 'all 0.15s',
-                    }}
-                  >
-                    <span style={{ fontSize: '20px' }}>{opt.icon}</span>
-                    <div>
-                      <p style={{ fontSize: '14px', fontWeight: '600', color: '#1A2E0E', margin: 0 }}>{opt.label}</p>
-                      {paymentMethod === opt.id && <p style={{ fontSize: '12px', color: '#5C8A2E', margin: '3px 0 0' }}>{opt.info}</p>}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-
-          </div>
-
-          {/* Right: Order Summary */}
-          <div style={{ backgroundColor: '#fff', borderRadius: '16px', border: '1.5px solid #e0dbd0', padding: '22px', position: isMobile ? 'static' : 'sticky', top: '90px', width: '100%', boxSizing: 'border-box' }}>
-            {/* Vendor header */}
-            <div style={{ display: 'flex', gap: '10px', alignItems: 'center', marginBottom: '18px', paddingBottom: '14px', borderBottom: '1px solid #e0dbd0' }}>
-              <div style={{ width: '40px', height: '40px', borderRadius: '50%', backgroundColor: '#EBF2DE', overflow: 'hidden', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '16px', fontWeight: '700', color: '#2D4A1E' }}>
-                {cart.vendorLogo
-                  ? <img src={cart.vendorLogo} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-                  : cart.vendorName.slice(0, 2).toUpperCase()}
-              </div>
-              <div>
-                <p style={{ fontSize: '12px', color: '#5C8A2E', fontWeight: '600', margin: 0 }}>{t('checkout.title')}</p>
-                <p style={{ fontSize: '15px', fontWeight: '700', color: '#1A2E0E', fontFamily: 'Georgia, serif', margin: 0 }}>{cart.vendorName}</p>
-              </div>
-            </div>
-
-            <h3 style={{ fontFamily: 'Georgia, serif', fontSize: '16px', color: '#1A2E0E', marginBottom: '14px' }}>{t('cart.title')}</h3>
-
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', marginBottom: '16px' }}>
-              {cart.items.map(({ product, quantity, variant }) => (
-                <div key={product.id + (variant?.id || '')} style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
-                  <div style={{ width: '44px', height: '44px', borderRadius: '8px', backgroundColor: '#EBF2DE', overflow: 'hidden', flexShrink: 0 }}>
-                    {product.primary_image
-                      ? <img src={product.primary_image} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-                      : <span style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', fontSize: '18px' }}>📦</span>}
-                  </div>
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <p style={{ fontSize: '13px', fontWeight: '600', color: '#1A2E0E', margin: 0, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{product.name}</p>
-                    {variant && <p style={{ fontSize: '11px', color: '#7a8a6e', margin: '1px 0 0' }}>{variant.option_name}: {variant.option_value}</p>}
-                    <p style={{ fontSize: '11px', color: '#7a8a6e', margin: '1px 0 0' }}>× {quantity}</p>
-                  </div>
-                  <span style={{ fontSize: '14px', fontWeight: '600', color: '#1A2E0E', flexShrink: 0 }}>
-                    ${(product.price * quantity).toFixed(2)}
-                  </span>
-                </div>
-              ))}
-            </div>
-
-            <div style={{ borderTop: '1px solid #e0dbd0', paddingTop: '14px', display: 'flex', flexDirection: 'column', gap: '8px', marginBottom: '18px' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px', color: '#4a5a3e' }}>
-                <span>{t('cart.subtotal')}</span><span>${subtotal.toFixed(2)}</span>
-              </div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px', color: '#4a5a3e' }}>
-                <span>{isRTL ? 'الشحن' : 'Shipping'}</span><span>${shipping.toFixed(2)}</span>
-              </div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '17px', fontWeight: '700', color: '#1A2E0E', paddingTop: '6px', borderTop: '1px solid #e0dbd0' }}>
-                <span>{isRTL ? 'المجموع' : 'Total'}</span>
-                <span style={{ fontFamily: 'Georgia, serif' }}>${total.toFixed(2)}</span>
-              </div>
-            </div>
-
-            {error && (
-              <p style={{ color: '#c62828', fontSize: '13px', backgroundColor: '#fce4ec', padding: '10px 12px', borderRadius: '8px', marginBottom: '12px' }}>{error}</p>
-            )}
-
-            <button onClick={handleSubmit} disabled={submitting} style={{
-              width: '100%', backgroundColor: submitting ? '#7a8a6e' : '#2D4A1E', color: '#fff',
-              border: 'none', borderRadius: '10px', padding: '15px', fontSize: '15px', fontWeight: '600',
-              cursor: submitting ? 'not-allowed' : 'pointer', transition: 'background 0.2s',
-              display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '10px',
-            }}>
-              {submitting ? <><Spinner size={18} color="#fff" /> {t('common.loading')}</> : `${t('checkout.placeOrder')} ${isRTL ? '←' : '→'}`}
-            </button>
-          </div>
-        </div>
-      </div>
-    </div>
+    <ol aria-label={t('checkout.steps')} className="flex items-center gap-2 sm:gap-3">
+      {labels.map((label, index) => {
+        const done = index < step
+        const current = index === step
+        return (
+          <li key={label} aria-current={current ? 'step' : undefined} className="flex flex-1 items-center gap-2 last:flex-none sm:gap-3">
+            <span className={cn(
+              'flex size-8 shrink-0 items-center justify-center rounded-full text-sm font-semibold',
+              done ? 'bg-primary text-primary-fg' : current ? 'border-2 border-primary text-primary' : 'border border-border-strong text-fg-subtle',
+            )}>
+              {done ? <Check aria-hidden className="size-4" /> : index + 1}
+            </span>
+            <span className={cn('text-sm font-medium', current ? 'text-fg' : 'text-fg-muted', !current && 'max-sm:sr-only')}>{label}</span>
+            {index < labels.length - 1 && <span aria-hidden className={cn('h-px flex-1', done ? 'bg-primary' : 'bg-border')} />}
+          </li>
+        )
+      })}
+    </ol>
   )
 }
 
-export default CheckoutPage
+function addressLine(address: Pick<Address, 'line1' | 'line2' | 'city'>) {
+  return [address.line1, address.line2, address.city].filter(Boolean).join(', ')
+}
+
+export default function CheckoutPage() {
+  const { vendorId = '' } = useParams()
+  const { t } = useTranslation()
+  usePageTitle(t('checkout.title'))
+  const user = useAuthStore(s => s.user)
+  const cart = useCartStore(s => s.getVendorCart(vendorId))
+  const clearVendorCart = useCartStore(s => s.clearVendorCart)
+  const saved = useAsync(signal => addressApi.list(signal), [])
+
+  const [step, setStep] = useState<Step>(0)
+  const [addressId, setAddressId] = useState<string>('new')
+  const [form, setForm] = useState<NewAddress>({ fullName: user?.profile?.full_name ?? '', phone: user?.profile?.phone ?? '', line1: '', city: '' })
+  const [saveAddress, setSaveAddress] = useState(true)
+  const [note, setNote] = useState('')
+  const [errors, setErrors] = useState<Partial<Record<keyof NewAddress, string>>>({})
+  const [submitError, setSubmitError] = useState('')
+  const [placing, setPlacing] = useState(false)
+  const [placed, setPlaced] = useState<{ order: OrderDetail; vendorName: string } | null>(null)
+  // One key per visit to checkout: a retry after a dropped connection replays
+  // the same order instead of creating a second one.
+  const [idempotencyKey] = useState(() => crypto.randomUUID())
+
+  // Preselect the default saved address once addresses load.
+  useEffect(() => {
+    const list = saved.data
+    if (list?.length) setAddressId(list.find(a => a.is_default)?.id ?? list[0].id)
+  }, [saved.data])
+
+  if (placed) {
+    return (
+      <Container className="grid max-w-xl justify-items-center gap-5 py-16 text-center">
+        <span className="flex size-16 items-center justify-center rounded-full bg-success-soft text-success"><CircleCheckBig aria-hidden className="size-8" /></span>
+        <h1 className="text-3xl font-semibold">{t('checkout.placed')}</h1>
+        <p className="text-fg-muted">{t('checkout.placedText', { vendor: placed.vendorName })}</p>
+        <div className="grid gap-1 rounded-lg bg-surface-muted px-6 py-4">
+          <span className="text-sm text-fg-muted">{t('checkout.orderNumber')}</span>
+          <bdi className="font-mono text-lg font-semibold">{placed.order.order_number}</bdi>
+        </div>
+        <div className="flex flex-wrap justify-center gap-3">
+          <Button asChild><Link to={`/account/orders/${placed.order.id}`}>{t('checkout.track')}</Link></Button>
+          <Button asChild variant="outline"><Link to="/shop">{t('checkout.keepShopping')}</Link></Button>
+        </div>
+      </Container>
+    )
+  }
+
+  if (!cart?.items.length) {
+    return (
+      <Container className="py-16">
+        <EmptyState icon={<ShoppingBag />} title={t('checkout.emptyCart')} action={<Button asChild><Link to="/cart">{t('cart.title')}</Link></Button>} />
+      </Container>
+    )
+  }
+
+  const subtotal = cart.items.reduce((sum, item) => sum + item.product.price * item.quantity, 0)
+  const total = subtotal + DELIVERY_FEE
+  const selected = saved.data?.find(a => a.id === addressId)
+  const usingNew = addressId === 'new'
+
+  const submitAddress = (event: FormEvent) => {
+    event.preventDefault()
+    if (usingNew) {
+      const next: typeof errors = {}
+      for (const key of ['fullName', 'phone', 'line1', 'city'] as const) if (!form[key].trim()) next[key] = t('checkout.required')
+      if (form.phone.trim() && !PHONE.test(form.phone.trim())) next.phone = t('checkout.phoneInvalid')
+      setErrors(next)
+      if (Object.keys(next).length) return
+    }
+    setStep(1)
+  }
+
+  const placeOrder = async () => {
+    setPlacing(true)
+    setSubmitError('')
+    try {
+      let shippingInfo: Record<string, string | undefined>
+      if (usingNew && saveAddress) {
+        const created = await addressApi.create({ ...form, isDefault: !saved.data?.length })
+        setAddressId(created.id)
+        shippingInfo = { address_id: created.id }
+      } else if (usingNew) {
+        shippingInfo = { shipping_name: form.fullName, shipping_phone: form.phone, shipping_address: form.line1, shipping_city: form.city }
+      } else {
+        shippingInfo = { address_id: addressId }
+      }
+      const order = await orders.place({
+        cartItems: cart.items.map(item => ({ product_id: item.product_id, variant_id: item.variant_id, quantity: item.quantity })),
+        shippingInfo: { ...shippingInfo, customer_note: note || undefined, payment_method: 'cash_delivery' },
+      }, idempotencyKey)
+      // Keep the shop name: the cart (its only source here) is cleared next.
+      setPlaced({ order, vendorName: cart.vendorName })
+      clearVendorCart(vendorId)
+      window.scrollTo(0, 0)
+    } catch (error) {
+      setSubmitError(error instanceof Error ? error.message : t('common.loadError'))
+    } finally {
+      setPlacing(false)
+    }
+  }
+
+  const field = (key: keyof NewAddress, label: string, props: React.InputHTMLAttributes<HTMLInputElement> = {}) => (
+    <FormField label={label} required error={errors[key]}>
+      <Input value={form[key]} onChange={e => setForm({ ...form, [key]: e.target.value })} {...props} />
+    </FormField>
+  )
+
+  const summaryRow = (label: string, value: number, strong?: boolean) => (
+    <div className={cn('flex justify-between', strong ? 'text-base font-semibold' : 'text-sm text-fg-muted')}>
+      <span>{label}</span><bdi className="tabular-nums">{formatPrice(value)}</bdi>
+    </div>
+  )
+
+  return (
+    <Container className="grid gap-6 py-6 sm:py-8">
+      <Breadcrumbs items={[{ label: t('cart.title'), to: '/cart' }, { label: t('checkout.title') }]} />
+      <h1 className="text-3xl font-semibold">{t('checkout.title')}</h1>
+      <Stepper step={step} />
+
+      <div className="grid gap-8 lg:grid-cols-[1fr_22rem]">
+        <div className="grid content-start gap-5">
+          {step === 0 && (
+            <form onSubmit={submitAddress} className="grid gap-5 rounded-lg border border-border bg-surface p-5" noValidate>
+              <h2 className="font-sans text-lg font-semibold">{t('checkout.stepAddress')}</h2>
+              {saved.loading ? <Skeleton className="h-20 rounded-lg" /> : !!saved.data?.length && (
+                <RadioGroup value={addressId} onValueChange={setAddressId} aria-label={t('checkout.savedAddresses')}>
+                  {saved.data.map(address => (
+                    <RadioItem key={address.id} value={address.id} label={address.label || address.full_name} description={`${addressLine(address)} · ${address.phone}`} />
+                  ))}
+                  <RadioItem value="new" label={t('checkout.newAddress')} />
+                </RadioGroup>
+              )}
+              {usingNew && (
+                <div className="grid gap-4 sm:grid-cols-2">
+                  {field('fullName', t('checkout.fullName'), { autoComplete: 'name' })}
+                  {field('phone', t('checkout.phone'), { type: 'tel', autoComplete: 'tel', inputMode: 'tel', dir: 'ltr' })}
+                  <div className="sm:col-span-2">{field('line1', t('checkout.address'), { autoComplete: 'street-address' })}</div>
+                  {field('city', t('checkout.city'), { autoComplete: 'address-level2' })}
+                  <div className="flex items-end sm:pb-2.5">
+                    <Checkbox label={t('checkout.saveAddress')} checked={saveAddress} onCheckedChange={v => setSaveAddress(v === true)} />
+                  </div>
+                </div>
+              )}
+              <FormField label={t('checkout.notes')}>
+                <Textarea value={note} onChange={e => setNote(e.target.value)} rows={2} maxLength={1000} placeholder={t('checkout.notesPlaceholder')} />
+              </FormField>
+              <Button type="submit" className="w-fit">{t('checkout.continue')}</Button>
+            </form>
+          )}
+
+          {step === 1 && (
+            <div className="grid gap-5 rounded-lg border border-border bg-surface p-5">
+              <h2 className="font-sans text-lg font-semibold">{t('checkout.payment')}</h2>
+              <RadioGroup value="cash" aria-label={t('checkout.payment')}>
+                <label className="flex cursor-pointer items-start gap-3 rounded-lg border-2 border-primary bg-primary-soft/40 p-4">
+                  <RadioItem value="cash" aria-label={t('checkout.cash')} />
+                  <Banknote aria-hidden className="mt-0.5 size-5 text-primary" />
+                  <span className="grid gap-0.5">
+                    <span className="font-semibold">{t('checkout.cash')}</span>
+                    <span className="text-sm text-fg-muted">{t('checkout.cashText')}</span>
+                  </span>
+                </label>
+              </RadioGroup>
+              <p className="text-sm text-fg-subtle">{t('checkout.otherMethods')}</p>
+              <div className="flex gap-3">
+                <Button variant="outline" onClick={() => setStep(0)}>{t('checkout.back')}</Button>
+                <Button onClick={() => setStep(2)}>{t('checkout.continue')}</Button>
+              </div>
+            </div>
+          )}
+
+          {step === 2 && (
+            <div className="grid gap-5 rounded-lg border border-border bg-surface p-5">
+              <h2 className="font-sans text-lg font-semibold">{t('checkout.review')}</h2>
+              <div className="flex items-start gap-3 rounded-lg bg-surface-muted p-4">
+                <MapPin aria-hidden className="mt-0.5 size-5 shrink-0 text-fg-subtle" />
+                <div className="grid flex-1 gap-0.5 text-sm">
+                  <span className="font-semibold">{t('checkout.deliverTo')}</span>
+                  <span>{usingNew ? form.fullName : selected?.full_name} · <bdi>{usingNew ? form.phone : selected?.phone}</bdi></span>
+                  <span className="text-fg-muted">{usingNew ? `${form.line1}, ${form.city}` : selected && addressLine(selected)}</span>
+                </div>
+                <Button variant="ghost" size="sm" startIcon={<Pencil />} onClick={() => setStep(0)}>{t('checkout.edit')}</Button>
+              </div>
+              <div className="flex items-center gap-3 rounded-lg bg-surface-muted p-4 text-sm">
+                <Banknote aria-hidden className="size-5 text-fg-subtle" />
+                <span className="font-semibold">{t('checkout.cash')}</span>
+              </div>
+              {submitError && <p role="alert" className="rounded-md bg-danger-soft px-4 py-3 text-sm font-medium text-danger">{submitError}</p>}
+              <div className="flex flex-wrap gap-3">
+                <Button variant="outline" onClick={() => setStep(1)}>{t('checkout.back')}</Button>
+                <Button variant="accent" size="lg" loading={placing} onClick={placeOrder}>
+                  {t('checkout.placeOrder', { total: formatPrice(total) })}
+                </Button>
+              </div>
+            </div>
+          )}
+        </div>
+
+        <aside className="lg:sticky lg:top-24 lg:self-start">
+          <div className="grid gap-4 rounded-lg border border-border bg-surface p-5">
+            <h2 className="font-sans text-base font-semibold">{t('cart.fromVendor', { vendor: cart.vendorName })}</h2>
+            <ul className="grid gap-3">
+              {cart.items.map(item => (
+                <li key={`${item.product_id}-${item.variant_id}`} className="flex items-center gap-3 text-sm">
+                  <span className="relative size-12 shrink-0 overflow-hidden rounded-md bg-surface-muted">
+                    {item.product.primary_image && <img src={item.product.primary_image} alt="" className="size-full object-cover" />}
+                    <span className="absolute -end-1 -top-1 flex size-5 items-center justify-center rounded-full bg-fg text-[11px] font-bold text-bg">{item.quantity}</span>
+                  </span>
+                  <span className="line-clamp-2 min-w-0 flex-1">{item.product.name}{item.variant && <span className="text-fg-muted"> · {item.variant.option_value}</span>}</span>
+                  <bdi className="tabular-nums">{formatPrice(item.product.price * item.quantity)}</bdi>
+                </li>
+              ))}
+            </ul>
+            <div className="grid gap-2 border-t border-border pt-4">
+              {summaryRow(t('cart.subtotal'), subtotal)}
+              {summaryRow(t('cart.delivery'), DELIVERY_FEE)}
+              {summaryRow(t('cart.total'), total, true)}
+            </div>
+          </div>
+        </aside>
+      </div>
+    </Container>
+  )
+}

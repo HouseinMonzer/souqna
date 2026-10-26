@@ -1,202 +1,74 @@
-import { useState, useEffect, useMemo, type SetStateAction } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useEffect, useState } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
-import { fetchVendors, type VendorType } from '../api/vendors'
-import { sampleVendors } from '../data/sampleData'
-import { Skeleton } from '../components/ui'
+import { Search, Store } from 'lucide-react'
+import { Breadcrumbs, EmptyState, Input, Pagination } from '../components/ui'
+import { Container } from '../components/layout/Container'
+import { VendorCard, VendorCardSkeleton } from '../components/commerce/VendorCard'
+import { ErrorState } from '../components/commerce/ErrorState'
+import { catalog } from '../api/catalog'
+import { useAsync } from '../hooks/useAsync'
+import { usePageTitle } from '../hooks/usePageTitle'
 
-const categories = ['All', 'Organic', 'Food', 'Electronics', 'Beauty', 'Home']
+const PAGE_SIZE = 24
 
-function VendorCard({ vendor }: { vendor: VendorType }) {
-  const navigate = useNavigate()
+export default function VendorsPage() {
   const { t } = useTranslation()
-  const [hovered, setHovered] = useState(false)
+  usePageTitle(t('vendors.title'))
+  const [params, setParams] = useSearchParams()
+  const search = params.get('q') ?? ''
+  const page = Math.max(1, Number(params.get('page')) || 1)
+  const [draft, setDraft] = useState(search)
 
-  return (
-    <div
-      onClick={() => navigate(`/vendors/${vendor.slug}`)}
-      onMouseEnter={() => setHovered(true)}
-      onMouseLeave={() => setHovered(false)}
-      style={{
-        backgroundColor: '#fff',
-        border: `1.5px solid ${hovered ? vendor.color : '#e0dbd0'}`,
-        borderRadius: '14px',
-        padding: '24px',
-        cursor: 'pointer',
-        transition: 'all 0.2s',
-        transform: hovered ? 'translateY(-4px)' : 'translateY(0)',
-        boxShadow: hovered ? '0 8px 28px rgba(0,0,0,0.08)' : 'none',
-      }}
-    >
-      <div style={{ display: 'flex', alignItems: 'center', gap: '14px', marginBottom: '16px' }}>
-        <div style={{
-          width: '52px', height: '52px', borderRadius: '50%',
-          backgroundColor: vendor.logoUrl ? '#fff' : vendor.color,
-          color: '#fff', overflow: 'hidden',
-          display: 'flex', alignItems: 'center', justifyContent: 'center',
-          fontWeight: '700', fontSize: '16px', flexShrink: 0,
-          border: vendor.logoUrl ? `1.5px solid ${vendor.color}` : 'none',
-        }}>
-          {vendor.logoUrl
-            ? <img src={vendor.logoUrl} alt={vendor.name} loading="lazy" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-            : vendor.initials}
-        </div>
-        <div>
-          <h3 style={{ fontSize: '16px', fontWeight: '700', color: '#1A2E0E', fontFamily: 'Georgia, serif', marginBottom: '4px' }}>
-            {vendor.name}
-          </h3>
-          <span style={{
-            fontSize: '11px', fontWeight: '600', padding: '2px 10px',
-            borderRadius: '20px', backgroundColor: '#EBF2DE', color: '#2D4A1E',
-          }}>
-            {vendor.category}
-          </span>
-        </div>
-      </div>
-
-      <p style={{ fontSize: '13px', color: '#7a8a6e', lineHeight: '1.6', marginBottom: '16px' }}>
-        {vendor.description || ''}
-      </p>
-
-      <div style={{
-        display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)',
-        gap: '8px', paddingTop: '16px', borderTop: '1px solid #e0dbd0',
-      }}>
-        {[
-          { label: t('shop.sortPopular'), val: vendor.rating > 0 ? `⭐ ${vendor.rating}` : '—' },
-          { label: t('checkout.title'), val: vendor.sales || 0 },
-          { label: t('vendors.products'), val: vendor.products },
-        ].map(s => (
-          <div key={s.label} style={{ textAlign: 'center' }}>
-            <div style={{ fontSize: '14px', fontWeight: '700', color: '#1A2E0E', fontFamily: 'Georgia, serif' }}>
-              {s.val}
-            </div>
-            <div style={{ fontSize: '11px', color: '#7a8a6e', marginTop: '2px' }}>{s.label}</div>
-          </div>
-        ))}
-      </div>
-
-      <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '16px', fontSize: '12px', color: '#7a8a6e' }}>
-        <span>📍 {vendor.location}</span>
-        <span>Since {vendor.joined}</span>
-      </div>
-    </div>
-  )
-}
-
-function VendorsPage() {
-  const { t, i18n } = useTranslation()
-  const isRTL = i18n.language?.startsWith('ar')
-  document.title = `${t('nav.vendors')} | SouQna`
-  const [activeCategory, setActiveCategory] = useState('All')
-  const [search, setSearch] = useState('')
-  const [vendors, setVendors] = useState<VendorType[]>([])
-  const [loading, setLoading] = useState(true)
-
+  // Debounce typing into the URL so the list follows without a request per key.
   useEffect(() => {
-    fetchVendors().then((data: SetStateAction<VendorType[]>) => {
-      setVendors(data && data.length > 0 ? data : sampleVendors)
-      setLoading(false)
-    }).catch(() => {
-      setVendors(sampleVendors)
-      setLoading(false)
-    })
-  }, [])
+    const timer = setTimeout(() => {
+      if (draft.trim() === search) return
+      const next = new URLSearchParams()
+      if (draft.trim()) next.set('q', draft.trim())
+      setParams(next, { replace: true })
+    }, 300)
+    return () => clearTimeout(timer)
+  }, [draft, search, setParams])
 
-  const filtered = useMemo(() => {
-    let result = [...vendors]
-    if (activeCategory !== 'All') result = result.filter(v => v.category === activeCategory)
-    if (search.trim()) {
-      const q = search.toLowerCase()
-      result = result.filter(v =>
-        v.name.toLowerCase().includes(q) ||
-        v.category.toLowerCase().includes(q) ||
-        v.location.toLowerCase().includes(q)
-      )
-    }
-    return result
-  }, [vendors, activeCategory, search])
+  const { data, loading, error, reload } = useAsync(signal => catalog.vendors({ search, page, limit: PAGE_SIZE }, signal), [search, page])
 
   return (
-    <div style={{ backgroundColor: '#F7F2E8', minHeight: '100vh' }} dir={isRTL ? 'rtl' : 'ltr'}>
-      <div style={{ backgroundColor: '#2D4A1E', padding: '36px 24px' }}>
-        <div style={{ maxWidth: '1200px', margin: '0 auto' }}>
-          <h1 style={{ color: '#F7F2E8', fontFamily: 'Georgia, serif', fontSize: '32px', fontWeight: '700', marginBottom: '6px' }}>
-            {t('vendors.title')}
-          </h1>
-          <p style={{ color: 'rgba(247,242,232,0.65)', fontSize: '15px' }}>
-            {loading ? t('common.loading') : `${vendors.length} ${t('vendors.verified')}`}
-          </p>
+    <Container className="grid gap-6 py-6 sm:py-8">
+      <Breadcrumbs items={[{ label: t('product.home'), to: '/' }, { label: t('vendors.title') }]} />
+      <div className="flex flex-wrap items-end justify-between gap-4">
+        <div className="grid gap-1">
+          <h1 className="text-3xl font-semibold">{t('vendors.title')}</h1>
+          <p className="text-fg-muted">{t('vendors.subtitle')}</p>
         </div>
+        <Input
+          type="search"
+          value={draft}
+          onChange={e => setDraft(e.target.value)}
+          placeholder={t('vendors.searchPlaceholder')}
+          aria-label={t('vendors.searchPlaceholder')}
+          startIcon={<Search />}
+          className="sm:w-72"
+        />
       </div>
 
-      <div style={{ maxWidth: '1200px', margin: '0 auto', padding: '32px 24px' }}>
-        <div style={{ position: 'relative', marginBottom: '20px', maxWidth: '480px' }}>
-          <span style={{ position: 'absolute', [isRTL ? 'right' : 'left']: '12px', top: '50%', transform: 'translateY(-50%)', fontSize: '14px', color: '#7a8a6e', pointerEvents: 'none' } as React.CSSProperties}>🔍</span>
-          <input
-            type="text"
-            placeholder={t('nav.searchPlaceholder')}
-            value={search}
-            onChange={e => setSearch(e.target.value)}
-            style={{
-              width: '100%', padding: '10px 16px 10px 36px',
-              borderRadius: '8px', border: '1.5px solid #e0dbd0',
-              backgroundColor: '#fff', fontSize: '14px', color: '#1A2E0E',
-              outline: 'none', boxSizing: 'border-box',
-            }}
-            onFocus={e => e.currentTarget.style.borderColor = '#5C8A2E'}
-            onBlur={e => e.currentTarget.style.borderColor = '#e0dbd0'}
-          />
-        </div>
-
-        <div style={{ display: 'flex', gap: '8px', marginBottom: '28px', flexWrap: 'wrap' }}>
-          {categories.map(cat => (
-            <button
-              key={cat}
-              onClick={() => setActiveCategory(cat)}
-              style={{
-                padding: '8px 18px', borderRadius: '20px', fontSize: '14px',
-                fontWeight: '500', cursor: 'pointer', transition: 'all 0.2s',
-                border: activeCategory === cat ? 'none' : '1.5px solid #e0dbd0',
-                backgroundColor: activeCategory === cat ? '#2D4A1E' : '#fff',
-                color: activeCategory === cat ? '#F7F2E8' : '#1A2E0E',
-              }}
-            >
-              {cat}
-            </button>
-          ))}
-        </div>
-
-        {loading ? (
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: '20px' }}>
-            {Array.from({ length: 9 }).map((_, i) => (
-              <div key={i} style={{ backgroundColor: '#fff', borderRadius: '14px', border: '1.5px solid #e0dbd0', padding: '24px' }}>
-                <div style={{ display: 'flex', gap: '14px', alignItems: 'center', marginBottom: '16px' }}>
-                  <Skeleton width={52} height={52} borderRadius={26} />
-                  <div style={{ flex: 1 }}><Skeleton height={18} width="70%" style={{ marginBottom: '8px' }} /><Skeleton height={14} width="40%" /></div>
-                </div>
-                <Skeleton height={14} style={{ marginBottom: '6px' }} /><Skeleton height={14} width="80%" />
-              </div>
-            ))}
-          </div>
-        ) : filtered.length === 0 ? (
-          <div style={{ textAlign: 'center', padding: '80px 0', color: '#7a8a6e' }}>
-            <div style={{ fontSize: '48px', marginBottom: '16px' }}>🏪</div>
-            <p style={{ fontSize: '18px', color: '#1A2E0E', fontWeight: '600', marginBottom: '8px' }}>{t('vendors.noVendors')}</p>
-          </div>
-        ) : (
-          <>
-            <p style={{ fontSize: '14px', color: '#7a8a6e', marginBottom: '20px' }}>
-              {filtered.length} {t('nav.vendors').toLowerCase()}
-            </p>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: '20px' }}>
-              {filtered.map(vendor => <VendorCard key={vendor.id} vendor={vendor} />)}
-            </div>
-          </>
-        )}
-      </div>
-    </div>
+      {error ? <ErrorState onRetry={reload} /> : !loading && !data?.data.length ? (
+        <EmptyState icon={<Store />} title={t('vendors.empty')} message={search ? t('vendors.emptyText') : undefined} />
+      ) : (
+        <ul className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          {loading
+            ? Array.from({ length: 6 }, (_, i) => <li key={i}><VendorCardSkeleton /></li>)
+            : data!.data.map(vendor => <li key={vendor.id} className="flex [&>article]:flex-1"><VendorCard vendor={vendor} /></li>)}
+        </ul>
+      )}
+      {data && (
+        <Pagination
+          page={page}
+          total={data.total}
+          limit={data.limit}
+          onPageChange={next => setParams(prev => { const p = new URLSearchParams(prev); p.set('page', String(next)); return p })}
+        />
+      )}
+    </Container>
   )
 }
-
-export default VendorsPage

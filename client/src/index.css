@@ -1,9 +1,73 @@
 @import "tailwindcss";
+@import "./styles/tokens.css";
 
-* {
-  margin: 0;
-  padding: 0;
-  box-sizing: border-box;
+/* `dark:` utilities follow the nearest [data-theme="dark"] ancestor, so a
+   subtree (e.g. the design showcase) can switch theme on its own. */
+@custom-variant dark (&:where([data-theme='dark'], [data-theme='dark'] *));
+
+@layer base {
+  *,
+  *::before,
+  *::after {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+  }
+
+  html {
+    -webkit-text-size-adjust: 100%;
+    text-rendering: optimizeLegibility;
+  }
+
+  body {
+    font-family: var(--font-sans);
+    background-color: var(--bg);
+    color: var(--fg);
+    overflow-x: hidden;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  h1, h2, h3 {
+    font-family: var(--font-display);
+    font-optical-sizing: auto;
+    letter-spacing: -0.01em;
+  }
+
+  html[lang='ar'] h1,
+  html[lang='ar'] h2,
+  html[lang='ar'] h3,
+  html[lang='ar'] h4,
+  html[lang='ar'] h5,
+  html[lang='ar'] h6 {
+    letter-spacing: 0;
+    font-weight: 700;
+  }
+
+  :focus-visible {
+    outline: 2px solid var(--ring);
+    outline-offset: 2px;
+  }
+
+  ::selection {
+    background-color: var(--color-brand-200);
+    color: var(--color-brand-950);
+  }
+
+  button:not(:disabled),
+  [role='button']:not([aria-disabled='true']) {
+    cursor: pointer;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
 }
 
 /* Hide browser-native password reveal/clear buttons. Edge + some Chromium
@@ -20,74 +84,4 @@ input::-webkit-credentials-auto-fill-button {
   height: 0;
   width: 0;
   margin: 0;
-}
-
-body {
-  font-family: 'Segoe UI', 'Tahoma', sans-serif;
-  background-color: #f9f6f0;
-  color: #1a1a1a;
-  overflow-x: hidden;
-}
-
-/* Arabic font stack — Cairo from Google Fonts for crisp Arabic glyphs */
-html[lang="ar"] body,
-html[lang="ar"] button,
-html[lang="ar"] input,
-html[lang="ar"] textarea,
-html[lang="ar"] select {
-  font-family: 'Cairo', 'IBM Plex Sans Arabic', 'Tahoma', 'Segoe UI', 'Arial', sans-serif;
-}
-
-html[lang="ar"] h1,
-html[lang="ar"] h2,
-html[lang="ar"] h3,
-html[lang="ar"] h4,
-html[lang="ar"] h5,
-html[lang="ar"] h6 {
-  font-family: 'Cairo', 'IBM Plex Sans Arabic', 'Tahoma', 'Segoe UI', 'Arial', sans-serif !important;
-  font-weight: 700;
-}
-
-img,
-video,
-canvas,
-svg {
-  max-width: 100%;
-}
-
-/* ─── Mobile responsive overrides for inline-styled grids ──────────────── */
-/* Collapse 2-column grids to 1 column on small screens.                   */
-/* Inline styles win unless we use !important on a more-specific selector. */
-@media (max-width: 640px) {
-  div[style*="grid-template-columns: 1fr 1fr"],
-  div[style*="grid-template-columns:1fr 1fr"],
-  div[style*="grid-template-columns: 2fr 1fr"],
-  div[style*="grid-template-columns: 1fr 2fr"] {
-    grid-template-columns: 1fr !important;
-  }
-
-  /* Reduce default padding on small screens */
-  section[style*="padding: 48px"],
-  section[style*="padding: 56px"] {
-    padding-left: 16px !important;
-    padding-right: 16px !important;
-  }
-}
-
-/* ─── Touch-friendly tap targets on mobile ─────────────────────────────── */
-@media (max-width: 640px) {
-  button {
-    min-height: 40px;
-  }
-  input,
-  select,
-  textarea {
-    font-size: 16px !important; /* prevent iOS zoom on focus */
-  }
-}
-
-/* ─── RTL helpers ─────────────────────────────────────────────────────── */
-html[dir="rtl"] input[type="search"],
-html[dir="rtl"] input[type="text"] {
-  text-align: right;
 }

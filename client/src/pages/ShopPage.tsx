@@ -1,294 +1,230 @@
-import { useCallback, useState, useEffect } from 'react'
-import { useNavigate, useSearchParams } from 'react-router-dom'
+import { useEffect, useMemo, useState, type FormEvent } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
-import { apiFetch } from '../lib/api'
-import { productService } from '../api/products'
-import { useCartStore } from '../store/cartStore'
-import { sampleCategories, sampleProducts } from '../data/sampleData'
+import { SlidersHorizontal, X } from 'lucide-react'
+import {
+  Badge, Breadcrumbs, Button, Checkbox, EmptyState, Input, RadioGroup, RadioItem, Rating, Select, Sheet, SheetContent,
+} from '../components/ui'
+import { Container } from '../components/layout/Container'
+import { ProductGrid } from '../components/commerce/ProductCard'
+import { ErrorState } from '../components/commerce/ErrorState'
+import { catalog, type ProductQuery, type ProductSort } from '../api/catalog'
+import { useAsync } from '../hooks/useAsync'
+import { usePageTitle } from '../hooks/usePageTitle'
 import type { Category, Product } from '../types/database.types'
-import { ProductCardSkeleton } from '../components/ui'
 
-function Stars({ rating }: { rating: number }) {
-  return (
-    <span>
-      {[1, 2, 3, 4, 5].map(i => (
-        <span key={i} style={{ color: i <= Math.round(rating) ? '#f59e0b' : '#d4cfc0', fontSize: '12px' }}>★</span>
-      ))}
-    </span>
-  )
+const PAGE_SIZE = 24
+const SORTS: ProductSort[] = ['newest', 'popular', 'price-asc', 'price-desc', 'rating']
+const SORT_LABELS: Record<ProductSort, string> = {
+  newest: 'shop.sortNewest', popular: 'shop.sortPopular', 'price-asc': 'shop.sortPriceAsc', 'price-desc': 'shop.sortPriceDesc', rating: 'shop.sortRating',
 }
 
-function ShopPage() {
-  const navigate = useNavigate()
-  const { t, i18n } = useTranslation()
-  const isRTL = i18n.language?.startsWith('ar')
-  const [searchParams] = useSearchParams()
-  const [search, setSearch] = useState(() => searchParams.get('search') || '')
-  const [sortBy, setSortBy] = useState(() => searchParams.get('sort') || 'default')
-  const [products, setProducts] = useState<Product[]>([])
-  const [categories, setCategories] = useState<Array<Pick<Category, 'id' | 'name'>>>([])
-  const [activeCategory, setActiveCategory] = useState<string | null>(null)
-  const [loading, setLoading] = useState(true)
-  const [addedId, setAddedId] = useState<string | null>(null)
-  const { addItem } = useCartStore()
+type Filters = Required<Pick<ProductQuery, 'sort'>> & Omit<ProductQuery, 'page' | 'limit' | 'sort'>
 
-  document.title = `${t('shop.title')} | SouQna`
+function readFilters(params: URLSearchParams): Filters {
+  const number = (key: string) => {
+    const value = params.get(key)
+    return value === null || value === '' || Number.isNaN(Number(value)) ? undefined : Number(value)
+  }
+  const sort = params.get('sort') as ProductSort | null
+  return {
+    search: params.get('search') || undefined,
+    category: params.get('category') || undefined,
+    minPrice: number('minPrice'),
+    maxPrice: number('maxPrice'),
+    minRating: number('minRating'),
+    inStock: params.get('inStock') === 'true',
+    sort: sort && SORTS.includes(sort) ? sort : 'newest',
+  }
+}
 
-  // Sync URL search param to state on mount / URL change
-  useEffect(() => {
-    const urlSearch = searchParams.get('search') || ''
-    setSearch(urlSearch)
-  }, [searchParams])
+function FilterPanel({ filters, categories, onChange }: {
+  filters: Filters
+  categories: Category[]
+  onChange: (patch: Partial<Filters>) => void
+}) {
+  const { t } = useTranslation()
+  const [min, setMin] = useState(filters.minPrice?.toString() ?? '')
+  const [max, setMax] = useState(filters.maxPrice?.toString() ?? '')
+  useEffect(() => { setMin(filters.minPrice?.toString() ?? ''); setMax(filters.maxPrice?.toString() ?? '') }, [filters.minPrice, filters.maxPrice])
 
-  // Fetch categories
-  useEffect(() => {
-    apiFetch<{ data: Category[] }>('/api/categories')
-      .then(({ data }) => setCategories(data && data.length > 0 ? data : sampleCategories))
-      .catch(() => setCategories(sampleCategories))
-  }, [])
-
-  const filterSampleProducts = useCallback((items: Product[]) => {
-    return items.filter(item => {
-      if (activeCategory && item.category_id !== activeCategory) return false
-      if (search && !item.name.toLowerCase().includes(search.toLowerCase())) return false
-      return true
-    }).sort((a, b) => {
-      if (sortBy === 'price-asc') return a.price - b.price
-      if (sortBy === 'price-desc') return b.price - a.price
-      if (sortBy === 'rating') return (b.rating || 0) - (a.rating || 0)
-      return 0
-    })
-  }, [activeCategory, search, sortBy])
-
-  // Fetch products
-  useEffect(() => {
-    setLoading(true)
-    productService.getAll(1, 48, {
-      category: activeCategory,
-      search,
-      sort: sortBy,
-    }).then(({ data }) => {
-      if (!data || data.length === 0) {
-        setProducts(filterSampleProducts(sampleProducts as unknown as Product[]))
-      } else {
-        setProducts(data)
-      }
-      setLoading(false)
-    }).catch(() => {
-      setProducts(filterSampleProducts(sampleProducts as Product[]))
-      setLoading(false)
-    })
-  }, [activeCategory, search, sortBy, filterSampleProducts])
-
-  const handleAddToCart = (e: React.MouseEvent, product: Product, primaryImage?: string) => {
-    e.stopPropagation()
-    const vendor = (product as any).vendor || product.vendors
-    if (!vendor) return
-    addItem({
-      id: product.id,
-      name: product.name,
-      slug: product.slug,
-      price: product.price,
-      compare_price: product.compare_price,
-      rating: product.rating,
-      total_reviews: product.total_reviews,
-      total_sold: product.total_sold,
-      featured: product.featured,
-      primary_image: primaryImage || (product as any).primary_image,
-      vendor: { id: vendor.id, store_name: vendor.store_name, slug: vendor.slug },
-      category: (product as any).category || product.categories || null,
-    }, 1, null)
-    setAddedId(product.id)
-    setTimeout(() => setAddedId(null), 1500)
+  const applyPrice = (event?: FormEvent) => {
+    event?.preventDefault()
+    onChange({ minPrice: min ? Number(min) : undefined, maxPrice: max ? Number(max) : undefined })
   }
 
+  const heading = 'text-sm font-semibold text-fg'
   return (
-    <div style={{ backgroundColor: '#F7F2E8', minHeight: '100vh' }} dir={isRTL ? 'rtl' : 'ltr'}>
+    <div className="grid gap-7">
+      <fieldset className="grid gap-3">
+        <legend className={heading}>{t('shop.category')}</legend>
+        <RadioGroup value={filters.category ?? 'all'} onValueChange={value => onChange({ category: value === 'all' ? undefined : value })} className="gap-2.5 pt-3">
+          <RadioItem value="all" label={t('shop.allCategories')} />
+          {categories.map(category => <RadioItem key={category.id} value={category.id} label={category.name} />)}
+        </RadioGroup>
+      </fieldset>
 
-      {/* Header */}
-      <div style={{ backgroundColor: '#2D4A1E', padding: '36px 24px' }}>
-        <div style={{ maxWidth: '1200px', margin: '0 auto' }}>
-          <h1 style={{ color: '#F7F2E8', fontFamily: 'Georgia, serif', fontSize: '32px', fontWeight: '700', marginBottom: '6px' }}>
-            {t('shop.title')}
-          </h1>
-          <p style={{ color: 'rgba(247,242,232,0.65)', fontSize: '15px' }}>
-            {loading ? t('common.loading') : t('shop.showing', { count: products.length })}
-          </p>
+      <form className="grid gap-3" onSubmit={applyPrice}>
+        <span className={heading}>{t('shop.price')}</span>
+        <div className="grid grid-cols-2 gap-2">
+          <Input type="number" inputMode="decimal" min={0} aria-label={t('shop.min')} placeholder={t('shop.min')} value={min} onChange={e => setMin(e.target.value)} onBlur={() => applyPrice()} startIcon={<span className="text-sm">$</span>} />
+          <Input type="number" inputMode="decimal" min={0} aria-label={t('shop.max')} placeholder={t('shop.max')} value={max} onChange={e => setMax(e.target.value)} onBlur={() => applyPrice()} startIcon={<span className="text-sm">$</span>} />
         </div>
-      </div>
+        <button type="submit" className="sr-only">{t('common.apply')}</button>
+      </form>
 
-      <div style={{ maxWidth: '1200px', margin: '0 auto', padding: '32px 24px' }}>
-
-        {/* Search + Sort */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '28px', flexWrap: 'wrap' }}>
-          <div style={{ position: 'relative', flex: 1, minWidth: '200px' }}>
-            <span style={{ position: 'absolute', [isRTL ? 'right' : 'left']: '12px', top: '50%', transform: 'translateY(-50%)', fontSize: '14px', color: '#7a8a6e' } as React.CSSProperties}>🔍</span>
-            <input
-              type="text"
-              placeholder={t('nav.searchPlaceholder')}
-              value={search}
-              onChange={e => setSearch(e.target.value)}
-              style={{
-                width: '100%', padding: isRTL ? '10px 36px 10px 16px' : '10px 16px 10px 36px',
-                borderRadius: '8px', border: '1.5px solid #e0dbd0',
-                backgroundColor: '#fff', fontSize: '14px', color: '#1A2E0E',
-                outline: 'none', boxSizing: 'border-box',
-              }}
-              onFocus={e => e.currentTarget.style.borderColor = '#5C8A2E'}
-              onBlur={e => e.currentTarget.style.borderColor = '#e0dbd0'}
+      <fieldset className="grid gap-3">
+        <legend className={heading}>{t('shop.rating')}</legend>
+        <RadioGroup value={String(filters.minRating ?? 0)} onValueChange={value => onChange({ minRating: Number(value) || undefined })} className="gap-2.5 pt-3">
+          {[4, 3, 0].map(value => (
+            <RadioItem
+              key={value}
+              value={String(value)}
+              label={value ? <span className="inline-flex items-center gap-2"><Rating value={value} size={14} />{t('shop.ratingAtLeast', { value })}</span> : t('shop.anyRating')}
             />
-          </div>
-          <select
-            value={sortBy}
-            onChange={e => setSortBy(e.target.value)}
-            style={{
-              padding: '10px 14px', borderRadius: '8px',
-              border: '1.5px solid #e0dbd0', backgroundColor: '#fff',
-              fontSize: '14px', color: '#1A2E0E', outline: 'none', cursor: 'pointer',
-            }}
-          >
-            <option value="default">{t('shop.sortNewest')}</option>
-            <option value="price-asc">{t('shop.sortPriceAsc')}</option>
-            <option value="price-desc">{t('shop.sortPriceDesc')}</option>
-            <option value="rating">{t('shop.sortPopular')}</option>
-          </select>
-        </div>
-
-        {/* Categories */}
-        <div style={{ display: 'flex', gap: '8px', marginBottom: '28px', flexWrap: 'wrap' }}>
-          <button
-            onClick={() => setActiveCategory(null)}
-            style={{
-              padding: '8px 18px', borderRadius: '20px', fontSize: '14px', fontWeight: '500',
-              cursor: 'pointer',
-              border: !activeCategory ? 'none' : '1.5px solid #e0dbd0',
-              backgroundColor: !activeCategory ? '#2D4A1E' : '#fff',
-              color: !activeCategory ? '#F7F2E8' : '#1A2E0E',
-            }}
-          >
-            {t('shop.allCategories')}
-          </button>
-          {categories.map(cat => (
-            <button
-              key={cat.id}
-              onClick={() => setActiveCategory(activeCategory === cat.id ? null : cat.id)}
-              style={{
-                padding: '8px 18px', borderRadius: '20px', fontSize: '14px', fontWeight: '500',
-                cursor: 'pointer',
-                border: activeCategory === cat.id ? 'none' : '1.5px solid #e0dbd0',
-                backgroundColor: activeCategory === cat.id ? '#2D4A1E' : '#fff',
-                color: activeCategory === cat.id ? '#F7F2E8' : '#1A2E0E',
-              }}
-            >
-              {cat.name}
-            </button>
           ))}
-        </div>
+        </RadioGroup>
+      </fieldset>
 
-        {/* Products */}
-        {loading ? (
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))', gap: '20px' }}>
-            {Array.from({ length: 12 }).map((_, i) => <ProductCardSkeleton key={i} />)}
-          </div>
-        ) : products.length === 0 ? (
-          <div style={{ textAlign: 'center', padding: '80px 0', color: '#7a8a6e' }}>
-            <div style={{ fontSize: '48px', marginBottom: '16px' }}>🔍</div>
-            <p style={{ fontSize: '18px', fontWeight: '600', color: '#1A2E0E', marginBottom: '8px' }}>{t('products.noProducts')}</p>
-            <button
-              onClick={() => { setSearch(''); setActiveCategory(null); setSortBy('default') }}
-              style={{ marginTop: '16px', padding: '10px 24px', backgroundColor: '#2D4A1E', color: '#fff', border: 'none', borderRadius: '8px', fontSize: '14px', fontWeight: '600', cursor: 'pointer' }}
-            >
-              {t('products.clearFilters')}
-            </button>
-          </div>
-        ) : (
-          <>
-            <p style={{ fontSize: '14px', color: '#7a8a6e', marginBottom: '20px' }}>
-              {t('shop.showing', { count: products.length })}
-            </p>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))', gap: '20px' }}>
-              {products.map((product) => {
-                const primaryImage = product.product_images?.find(img => img.is_primary)?.image_url
-                  || product.product_images?.[0]?.image_url
-                return (
-                  <div
-                    key={product.id}
-                    onClick={() => navigate(`/product/${product.slug}`)}
-                    style={{
-                      backgroundColor: '#fff', border: '1.5px solid #e0dbd0',
-                      borderRadius: '14px', overflow: 'hidden', cursor: 'pointer', transition: 'all 0.2s',
-                    }}
-                    onMouseEnter={e => {
-                      e.currentTarget.style.transform = 'translateY(-4px)'
-                      e.currentTarget.style.boxShadow = '0 8px 28px rgba(0,0,0,0.09)'
-                      e.currentTarget.style.borderColor = '#5C8A2E'
-                    }}
-                    onMouseLeave={e => {
-                      e.currentTarget.style.transform = 'translateY(0)'
-                      e.currentTarget.style.boxShadow = 'none'
-                      e.currentTarget.style.borderColor = '#e0dbd0'
-                    }}
-                  >
-                    <div style={{ height: '160px', backgroundColor: '#EBF2DE', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '60px', position: 'relative', overflow: 'hidden' }}>
-                      {primaryImage
-                        ? <img src={primaryImage} alt={product.name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} loading="lazy" />
-                        : '🛍️'
-                      }
-                      {product.compare_price && product.compare_price > product.price && (
-                        <span style={{ position: 'absolute', top: '8px', left: '8px', backgroundColor: '#ef4444', color: '#fff', fontSize: '11px', fontWeight: '700', padding: '3px 8px', borderRadius: '6px' }}>
-                          -{Math.round(100 - (product.price / product.compare_price) * 100)}%
-                        </span>
-                      )}
-                    </div>
-                    <div style={{ padding: '14px' }}>
-                      <p style={{ fontSize: '11px', fontWeight: '600', color: '#5C8A2E', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '4px' }}>
-                        {product.vendors?.store_name}
-                      </p>
-                      <h3 style={{ fontSize: '15px', fontWeight: '600', color: '#1A2E0E', marginBottom: '6px', lineHeight: '1.3', fontFamily: 'Georgia, serif' }}>
-                        {product.name}
-                      </h3>
-                      {product.short_description && (
-                        <p style={{ fontSize: '13px', color: '#7a8a6e', marginBottom: '10px', lineHeight: '1.5', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' } as React.CSSProperties}>
-                          {product.short_description}
-                        </p>
-                      )}
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '14px' }}>
-                        <Stars rating={Number(product.rating)} />
-                        <span style={{ fontSize: '12px', color: '#7a8a6e' }}>({product.total_reviews})</span>
-                      </div>
-                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                        <div>
-                          <span style={{ fontSize: '20px', fontWeight: '700', color: '#1A2E0E', fontFamily: 'Georgia, serif' }}>
-                            ${Number(product.price).toFixed(2)}
-                          </span>
-                          {product.compare_price && product.compare_price > product.price && (
-                            <span style={{ fontSize: '13px', color: '#9ca3af', textDecoration: 'line-through', marginLeft: '6px' }}>
-                              ${Number(product.compare_price).toFixed(2)}
-                            </span>
-                          )}
-                        </div>
-                        <button
-                          onClick={e => handleAddToCart(e, product, primaryImage)}
-                          style={{
-                            backgroundColor: addedId === product.id ? '#5C8A2E' : '#2D4A1E',
-                            color: '#fff', border: 'none',
-                            borderRadius: '8px', padding: '9px 18px', fontSize: '13px',
-                            fontWeight: '600', cursor: 'pointer', transition: 'background-color 0.2s',
-                          }}
-                        >
-                          {addedId === product.id ? t('products.added') : t('products.addToCart')}
-                        </button>
-                      </div>
-                    </div>
-                  </div>
-                )
-              })}
-            </div>
-          </>
-        )}
-      </div>
+      <fieldset className="grid gap-3">
+        <legend className={heading}>{t('shop.availability')}</legend>
+        <Checkbox className="mt-0" label={t('shop.inStockOnly')} checked={!!filters.inStock} onCheckedChange={checked => onChange({ inStock: checked === true })} />
+      </fieldset>
     </div>
   )
 }
 
-export default ShopPage
+export default function ShopPage() {
+  const { t } = useTranslation()
+  const [params, setParams] = useSearchParams()
+  const filters = useMemo(() => readFilters(params), [params])
+  const [filtersOpen, setFiltersOpen] = useState(false)
+  const [page, setPage] = useState(1)
+  const [items, setItems] = useState<Product[]>([])
+
+  usePageTitle(filters.search ? t('shop.searchTitle', { query: filters.search }) : t('shop.title'))
+
+  const categories = useAsync(signal => catalog.categories(signal), [])
+  const filterKey = params.toString()
+  const result = useAsync(signal => catalog.products({ ...filters, page, limit: PAGE_SIZE }, signal), [filterKey, page])
+
+  // A filter change starts again from page 1; later pages append.
+  useEffect(() => { setPage(1); setItems([]) }, [filterKey])
+  useEffect(() => {
+    if (!result.data) return
+    setItems(previous => (result.data!.page === 1 ? result.data!.data : [...previous, ...result.data!.data]))
+  }, [result.data])
+
+  const update = (patch: Partial<Filters>) => {
+    const next = new URLSearchParams(params)
+    for (const [key, value] of Object.entries(patch)) {
+      if (value === undefined || value === false || value === '' || (key === 'sort' && value === 'newest')) next.delete(key)
+      else next.set(key, String(value))
+    }
+    setParams(next, { replace: true })
+  }
+
+  const categoryName = categories.data?.find(c => c.id === filters.category)?.name
+  const chips = [
+    filters.search && { key: 'search', label: `“${filters.search}”` },
+    categoryName && { key: 'category', label: categoryName },
+    (filters.minPrice !== undefined || filters.maxPrice !== undefined) && {
+      key: 'price',
+      label: filters.minPrice !== undefined && filters.maxPrice !== undefined
+        ? t('shop.priceRange', { min: filters.minPrice, max: filters.maxPrice })
+        : filters.minPrice !== undefined ? t('shop.priceFrom', { min: filters.minPrice }) : t('shop.priceTo', { max: filters.maxPrice }),
+    },
+    filters.minRating && { key: 'minRating', label: t('shop.ratingAtLeast', { value: filters.minRating }) },
+    filters.inStock && { key: 'inStock', label: t('shop.inStockOnly') },
+  ].filter(Boolean) as { key: string; label: string }[]
+
+  const removeChip = (key: string) => update(key === 'price' ? { minPrice: undefined, maxPrice: undefined } : { [key]: undefined })
+  const clearAll = () => setParams(filters.sort !== 'newest' ? { sort: filters.sort } : {}, { replace: true })
+  const total = result.data?.total ?? 0
+  const initialLoading = result.loading && page === 1
+  const panel = <FilterPanel filters={filters} categories={categories.data ?? []} onChange={update} />
+
+  return (
+    <Container className="grid gap-6 py-6 sm:py-8">
+      <div className="grid gap-3">
+        <Breadcrumbs items={[{ label: t('product.home'), to: '/' }, { label: t('shop.title'), to: filters.search || categoryName ? '/shop' : undefined }, ...(categoryName ? [{ label: categoryName }] : [])]} />
+        <div className="flex flex-wrap items-end justify-between gap-3">
+          <div className="grid gap-1">
+            <h1 className="text-3xl font-semibold">{filters.search ? t('shop.searchTitle', { query: filters.search }) : categoryName ?? t('shop.title')}</h1>
+            <p className="text-sm text-fg-muted" aria-live="polite">{initialLoading ? t('common.loading') : t('common.results', { count: total })}</p>
+          </div>
+          <div className="flex items-center gap-2">
+            <Button variant="outline" size="sm" className="lg:hidden" startIcon={<SlidersHorizontal />} onClick={() => setFiltersOpen(true)}>
+              {t('shop.filters')}
+              {chips.length > 0 && <Badge tone="brand" appearance="solid" size="sm">{chips.length}</Badge>}
+            </Button>
+            <label className="sr-only" htmlFor="shop-sort">{t('shop.sort')}</label>
+            <Select id="shop-sort" value={filters.sort} onChange={e => update({ sort: e.target.value as ProductSort })} className="h-9 w-auto min-w-44 text-sm">
+              {SORTS.map(sort => <option key={sort} value={sort}>{t(SORT_LABELS[sort])}</option>)}
+            </Select>
+          </div>
+        </div>
+        {chips.length > 0 && (
+          <ul className="flex flex-wrap items-center gap-2">
+            {chips.map(chip => (
+              <li key={chip.key}>
+                <button
+                  type="button"
+                  onClick={() => removeChip(chip.key)}
+                  className="inline-flex items-center gap-1.5 rounded-full border border-border bg-surface py-1 ps-3 pe-2 text-sm hover:border-border-strong"
+                  aria-label={`${chip.label} — ${t('common.clear')}`}
+                >
+                  {chip.label}
+                  <X aria-hidden className="size-3.5 text-fg-subtle" />
+                </button>
+              </li>
+            ))}
+            <li><Button variant="link" size="sm" onClick={clearAll}>{t('shop.clearAll')}</Button></li>
+          </ul>
+        )}
+      </div>
+
+      <div className="grid gap-8 lg:grid-cols-[15rem_1fr]">
+        <aside className="hidden lg:block" aria-label={t('shop.filters')}>
+          <div className="sticky top-24">{panel}</div>
+        </aside>
+
+        <div className="grid min-w-0 content-start gap-6">
+          {result.error && !items.length ? (
+            <ErrorState onRetry={result.reload} />
+          ) : !initialLoading && !items.length ? (
+            <EmptyState
+              icon={<SlidersHorizontal />}
+              title={t('shop.empty')}
+              message={t('shop.emptyText')}
+              action={chips.length ? clearAll : undefined}
+              actionLabel={chips.length ? t('shop.clearAll') : undefined}
+            />
+          ) : (
+            <ProductGrid products={items} loading={initialLoading} skeletons={12} />
+          )}
+          {items.length > 0 && items.length < total && (
+            <Button variant="outline" className="justify-self-center" loading={result.loading} onClick={() => setPage(p => p + 1)}>
+              {t('common.seeMore')}
+            </Button>
+          )}
+        </div>
+      </div>
+
+      <Sheet open={filtersOpen} onOpenChange={setFiltersOpen}>
+        <SheetContent
+          side="start"
+          title={t('shop.filters')}
+          footer={
+            <div className="flex gap-2">
+              <Button variant="outline" className="flex-1" onClick={clearAll}>{t('shop.clearAll')}</Button>
+              <Button className="flex-1" onClick={() => setFiltersOpen(false)}>{t('shop.showResults')}</Button>
+            </div>
+          }
+        >
+          <div className="py-2">{panel}</div>
+        </SheetContent>
+      </Sheet>
+    </Container>
+  )
+}

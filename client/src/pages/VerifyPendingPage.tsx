@@ -1,100 +1,57 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
-import { apiFetch } from '../lib/api'
+import { useTranslation } from 'react-i18next'
+import { MailCheck } from 'lucide-react'
+import { Button } from '../components/ui'
+import { AuthShell } from '../components/auth/AuthShell'
+import { ApiError, apiFetch } from '../lib/api'
+import { usePageTitle } from '../hooks/usePageTitle'
 
-const s = {
-  page: { backgroundColor: '#F7F2E8', minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '24px', boxSizing: 'border-box' as const },
-  card: { width: '100%', maxWidth: 460, backgroundColor: '#fff', border: '1.5px solid #e0dbd0', borderRadius: 16, padding: '40px 36px', boxSizing: 'border-box' as const, boxShadow: '0 10px 34px rgba(45,74,30,0.08)', textAlign: 'center' as const },
-  logo: { fontFamily: 'Georgia, serif', fontSize: 28, fontWeight: 700 },
-  icon: { fontSize: 56, marginBottom: 16 },
-  h1: { fontFamily: 'Georgia, serif', fontSize: 22, color: '#1A2E0E', margin: '16px 0 8px' },
-  p: { color: '#7a8a6e', fontSize: 15, lineHeight: 1.6, margin: '0 0 24px' },
-  emailBadge: { display: 'inline-block', backgroundColor: '#f0f7e8', color: '#2D4A1E', padding: '6px 14px', borderRadius: 20, fontSize: 14, fontWeight: 700, marginBottom: 24 },
-  divider: { border: 'none', borderTop: '1px solid #e0dbd0', margin: '24px 0' },
-  btn: { display: 'inline-block', padding: '11px 24px', backgroundColor: '#5C8A2E', color: '#fff', border: 'none', borderRadius: 10, fontSize: 14, fontWeight: 700, cursor: 'pointer', opacity: 1 },
-  btnDisabled: { opacity: 0.6, cursor: 'default' },
-  success: { backgroundColor: '#f0fce8', color: '#2D4A1E', border: '1px solid #b8e08a', borderRadius: 8, padding: '11px 14px', fontSize: 14, marginBottom: 16 },
-  error: { backgroundColor: '#fee2e2', color: '#991b1b', border: '1px solid #fecaca', borderRadius: 8, padding: '11px 14px', fontSize: 14, marginBottom: 16 },
-  small: { color: '#aaa', fontSize: 13, marginTop: 4 },
-}
-
-function VerifyPendingPage() {
+export default function VerifyPendingPage() {
+  const { t } = useTranslation()
+  usePageTitle(t('auth.pendingTitle'))
   const [params] = useSearchParams()
-  const email = params.get('email') || ''
-
+  const email = params.get('email') ?? ''
+  const [cooldown, setCooldown] = useState(60)
+  const [message, setMessage] = useState('')
   const [sending, setSending] = useState(false)
-  const [cooldown, setCooldown] = useState(0)
-  const [success, setSuccess] = useState('')
-  const [error, setError] = useState('')
 
-  const handleResend = async () => {
-    if (!email || sending || cooldown > 0) return
+  useEffect(() => {
+    if (cooldown <= 0) return
+    const timer = setTimeout(() => setCooldown(c => c - 1), 1000)
+    return () => clearTimeout(timer)
+  }, [cooldown])
+
+  const resend = async () => {
     setSending(true)
-    setSuccess('')
-    setError('')
+    setMessage('')
     try {
-      await apiFetch('/api/auth/resend-verification', {
-        method: 'POST',
-        body: JSON.stringify({ email }),
-      })
-      setSuccess('Verification email sent! Check your inbox.')
-      // Start 60s countdown
+      await apiFetch('/api/auth/resend-verification', { method: 'POST', body: JSON.stringify({ email }) })
+      setMessage(t('auth.resent'))
       setCooldown(60)
-      const interval = setInterval(() => {
-        setCooldown(prev => {
-          if (prev <= 1) { clearInterval(interval); return 0 }
-          return prev - 1
-        })
-      }, 1000)
-    } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : 'Failed to resend. Please try again.'
-      setError(msg)
+    } catch (err) {
+      const wait = err instanceof ApiError ? Number(err.body?.wait) : NaN
+      if (wait > 0) setCooldown(wait)
+      setMessage(err instanceof Error ? err.message : t('common.loadError'))
     } finally {
       setSending(false)
     }
   }
 
   return (
-    <div style={s.page}>
-      <div style={s.card}>
-        <div>
-          <span style={{ ...s.logo, color: '#2D4A1E' }}>Souq</span>
-          <span style={{ ...s.logo, color: '#5C8A2E' }}>na</span>
+    <AuthShell title={t('auth.pendingTitle')}>
+      <div className="grid gap-5">
+        <span className="flex size-14 items-center justify-center rounded-full bg-primary-soft text-primary-soft-fg"><MailCheck aria-hidden className="size-7" /></span>
+        <p className="text-fg-muted">{t('auth.pendingText', { email: email || '—' })}</p>
+        <p className="text-sm text-fg-muted">{t('auth.pendingHelp')}</p>
+        {message && <p role="status" className="rounded-md bg-surface-muted px-4 py-3 text-sm">{message}</p>}
+        <div className="flex flex-wrap gap-3">
+          <Button variant="outline" disabled={!email || cooldown > 0} loading={sending} onClick={resend}>
+            {cooldown > 0 ? t('auth.resendIn', { seconds: cooldown }) : t('auth.resend')}
+          </Button>
+          <Button asChild variant="ghost"><Link to="/login">{t('auth.backToLogin')}</Link></Button>
         </div>
-
-        <div style={s.icon}>📬</div>
-        <h1 style={s.h1}>Check your inbox</h1>
-        <p style={s.p}>
-          We've sent a verification link to:
-        </p>
-        {email && <div style={s.emailBadge}>{email}</div>}
-        <p style={s.p}>
-          Click the link in the email to activate your account. The link expires in 24 hours.
-        </p>
-
-        {success && <div role="status" style={s.success}>{success}</div>}
-        {error && <div role="alert" style={s.error}>{error}</div>}
-
-        <hr style={s.divider} />
-
-        <p style={{ ...s.p, margin: '0 0 12px', fontSize: 14 }}>Didn't receive it? Check your spam folder, or:</p>
-
-        <button
-          onClick={handleResend}
-          disabled={sending || cooldown > 0 || !email}
-          style={{ ...s.btn, ...(sending || cooldown > 0 ? s.btnDisabled : {}) }}
-        >
-          {sending ? 'Sending…' : cooldown > 0 ? `Resend in ${cooldown}s` : 'Resend verification email'}
-        </button>
-
-        <hr style={s.divider} />
-
-        <p style={s.small}>
-          <Link to="/login" style={{ color: '#5C8A2E', fontWeight: 700, textDecoration: 'none' }}>← Back to sign in</Link>
-        </p>
       </div>
-    </div>
+    </AuthShell>
   )
 }
-
-export default VerifyPendingPage

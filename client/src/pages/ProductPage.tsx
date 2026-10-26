@@ -1,357 +1,344 @@
-import { useParams, useNavigate } from 'react-router-dom'
-import { useState, useEffect } from 'react'
+import { useEffect, useMemo, useState, type FormEvent } from 'react'
+import { Link, useNavigate, useParams } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
-import { productService } from '../api/products'
+import { BadgeCheck, MessageSquare, PackageX, ShoppingBag, Truck, Wallet } from 'lucide-react'
+import {
+  Avatar, Badge, Breadcrumbs, Button, EmptyState, FormField, ImageGallery, Input, Pagination, PriceTag, QuantityStepper,
+  Rating, RatingInput, Skeleton, Tabs, TabsContent, TabsList, TabsTrigger, Textarea, toast,
+} from '../components/ui'
+import { Container } from '../components/layout/Container'
+import { ProductGrid } from '../components/commerce/ProductCard'
+import { WishlistButton } from '../components/commerce/WishlistButton'
+import { ErrorState } from '../components/commerce/ErrorState'
+import { catalog, reviews as reviewsApi, type ReviewPage } from '../api/catalog'
+import { useAsync } from '../hooks/useAsync'
+import { usePageTitle } from '../hooks/usePageTitle'
 import { useCartStore } from '../store/cartStore'
-import { Skeleton } from '../components/ui'
-import { useIsMobile } from '../hooks/useMediaQuery'
-import type { Product, ProductImage, ProductVariant } from '../types/database.types'
+import { useAuthStore } from '../store/authStore'
+import { productImages, toCartProduct } from '../lib/product'
+import { cn } from '../lib/utils'
+import type { Product, ProductVariant } from '../types/database.types'
 
-function Stars({ rating }: { rating: number }) {
+function ProductJsonLd({ product }: { product: Product }) {
+  const data = {
+    '@context': 'https://schema.org',
+    '@type': 'Product',
+    name: product.name,
+    description: product.short_description || product.description || undefined,
+    image: productImages(product).map(i => i.src),
+    brand: product.vendor ? { '@type': 'Brand', name: product.vendor.store_name } : undefined,
+    offers: {
+      '@type': 'Offer',
+      price: product.price.toFixed(2),
+      priceCurrency: 'USD',
+      availability: product.stock > 0 ? 'https://schema.org/InStock' : 'https://schema.org/OutOfStock',
+    },
+    ...(product.total_reviews > 0 ? { aggregateRating: { '@type': 'AggregateRating', ratingValue: product.rating, reviewCount: product.total_reviews } } : {}),
+  }
+  return <script type="application/ld+json">{JSON.stringify(data)}</script>
+}
+
+function ReviewForm({ productId, onPosted }: { productId: string; onPosted: () => void }) {
+  const { t } = useTranslation()
+  const [rating, setRating] = useState(0)
+  const [title, setTitle] = useState('')
+  const [body, setBody] = useState('')
+  const [saving, setSaving] = useState(false)
+  const [error, setError] = useState('')
+
+  const submit = async (event: FormEvent) => {
+    event.preventDefault()
+    if (!rating) return
+    setSaving(true)
+    setError('')
+    try {
+      await reviewsApi.submit(productId, { rating, title: title || undefined, body: body || undefined })
+      toast({ title: t('product.reviewPosted'), tone: 'success' })
+      setTitle('')
+      setBody('')
+      onPosted()
+    } catch (err) {
+      setError(err instanceof Error ? err.message : t('common.loadError'))
+    } finally {
+      setSaving(false)
+    }
+  }
+
   return (
-    <span>
-      {[1, 2, 3, 4, 5].map(i => (
-        <span key={i} style={{ color: i <= Math.round(rating) ? '#A3C46C' : '#d4cfc0', fontSize: '16px' }}>★</span>
-      ))}
-    </span>
+    <form onSubmit={submit} className="grid gap-4 rounded-lg border border-border bg-surface p-5">
+      <h3 className="font-sans text-base font-semibold">{t('product.writeReview')}</h3>
+      <RatingInput value={rating} onChange={setRating} label={t('product.yourReview')} />
+      <FormField label={t('product.reviewTitle')}>
+        <Input value={title} onChange={e => setTitle(e.target.value)} maxLength={120} />
+      </FormField>
+      <FormField label={t('product.reviewBody')} error={error || undefined}>
+        <Textarea value={body} onChange={e => setBody(e.target.value)} maxLength={2000} rows={3} />
+      </FormField>
+      <Button type="submit" className="w-fit" disabled={!rating} loading={saving}>{t('product.submitReview')}</Button>
+    </form>
   )
 }
 
-function ProductPage() {
-  const { slug } = useParams()
-  const navigate = useNavigate()
+function Reviews({ product }: { product: Product }) {
   const { t, i18n } = useTranslation()
-  const isRTL = i18n.language?.startsWith('ar')
-  const { addItem } = useCartStore()
-  const [added, setAdded] = useState(false)
-  const [product, setProduct] = useState<Product | null>(null)
-  const [related, setRelated] = useState<Product[]>([])
-  const [loading, setLoading] = useState(true)
-  const [selectedImage, setSelectedImage] = useState<string | null>(null)
-  const [selectedVariant, setSelectedVariant] = useState<ProductVariant | null>(null)
-  const [qty, setQty] = useState(1)
-  const isMobile = useIsMobile()
-
-  useEffect(() => {
-    if (!slug) return
-    setLoading(true)
-    productService.getBySlug(slug)
-      .then((data) => {
-        setProduct(data)
-        const primary = data?.product_images?.find((img: ProductImage) => img.is_primary)?.image_url
-          || data?.product_images?.[0]?.image_url
-        setSelectedImage(primary ?? null)
-        if (data?.category_id) {
-          productService.getRelated(data.category_id, data.id, 3)
-            .then((rel) => setRelated(rel ?? []))
-        }
-        setLoading(false)
-      })
-      .catch(() => setLoading(false))
-  }, [slug])
-
-  useEffect(() => {
-    if (product) document.title = `${product.name} | SouqNa`
-  }, [product])
-
-  if (loading) {
-    return (
-      <div style={{ backgroundColor: '#F7F2E8', minHeight: '100vh', maxWidth: '1100px', margin: '0 auto', padding: '40px 24px' }}>
-        <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr', gap: '40px' }}>
-          <Skeleton height={440} borderRadius={16} />
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', paddingTop: '8px' }}>
-            <Skeleton height={14} width="40%" />
-            <Skeleton height={32} width="85%" />
-            <Skeleton height={14} width="30%" />
-            <Skeleton height={20} width="25%" />
-            <Skeleton height={100} />
-            <Skeleton height={52} borderRadius={10} />
-          </div>
-        </div>
-      </div>
-    )
-  }
-
-  if (!product) {
-    return (
-      <div style={{ textAlign: 'center', padding: '80px 24px', backgroundColor: '#F7F2E8', minHeight: '100vh' }} dir={isRTL ? 'rtl' : 'ltr'}>
-        <div style={{ fontSize: '64px', marginBottom: '16px' }}>😕</div>
-        <h2 style={{ fontSize: '24px', color: '#1A2E0E', marginBottom: '8px', fontFamily: 'Georgia, serif' }}>{t('products.noProducts')}</h2>
-        <button onClick={() => navigate('/shop')} style={{ backgroundColor: '#2D4A1E', color: '#fff', border: 'none', borderRadius: '8px', padding: '12px 24px', fontSize: '15px', fontWeight: '600', cursor: 'pointer', marginTop: '16px' }}>
-          {isRTL ? '→' : '←'} {t('nav.shop')}
-        </button>
-      </div>
-    )
-  }
-
-  const images = product.product_images ?? []
-  const displayPrice = product.price + (selectedVariant?.price_adjustment || 0)
-
-  const handleAddToCart = () => {
-    const vendor = (product as any).vendor || product.vendors
-    if (!vendor) return
-    addItem({
-      id: product.id,
-      name: product.name,
-      slug: product.slug,
-      price: displayPrice,
-      compare_price: product.compare_price,
-      rating: product.rating,
-      total_reviews: product.total_reviews,
-      total_sold: product.total_sold,
-      featured: product.featured,
-      primary_image: selectedImage || (product as any).primary_image,
-      vendor: { id: vendor.id, store_name: vendor.store_name, slug: vendor.slug },
-      category: (product as any).category || product.categories || null,
-    }, qty, selectedVariant)
-    setAdded(true)
-    setTimeout(() => setAdded(false), 2000)
-  }
+  const user = useAuthStore(s => s.user)
+  const [page, setPage] = useState(1)
+  const { data, loading, reload } = useAsync<ReviewPage>(signal => reviewsApi.list(product.id, page, signal), [product.id, page])
+  const summary = data?.summary
+  const dateFormat = new Intl.DateTimeFormat(i18n.language, { dateStyle: 'medium' })
 
   return (
-    <div style={{ backgroundColor: '#F7F2E8', minHeight: '100vh' }}>
-
-      {/* Breadcrumb */}
-      <div style={{ backgroundColor: '#fff', borderBottom: '1px solid #e0dbd0' }}>
-        <div style={{ maxWidth: '1200px', margin: '0 auto', padding: '12px 24px' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '13px', color: '#7a8a6e' }}>
-            <span onClick={() => navigate('/')} style={{ cursor: 'pointer', color: '#5C8A2E' }}>Home</span>
-            <span>›</span>
-            <span onClick={() => navigate('/shop')} style={{ cursor: 'pointer', color: '#5C8A2E' }}>Shop</span>
-            <span>›</span>
-            <span style={{ color: '#1A2E0E' }}>{product.name}</span>
-          </div>
-        </div>
-      </div>
-
-      <div style={{ maxWidth: '1200px', margin: '0 auto', padding: '40px 24px' }}>
-
-        {/* Main grid */}
-        <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr', gap: isMobile ? '24px' : '48px', marginBottom: '64px' }}>
-
-          {/* Images */}
-          <div>
-            <div style={{
-              backgroundColor: '#EBF2DE', borderRadius: '16px', height: '380px',
-              display: 'flex', alignItems: 'center', justifyContent: 'center',
-              fontSize: '120px', overflow: 'hidden', marginBottom: '12px',
-            }}>
-              {selectedImage
-                ? <img src={selectedImage} alt={product.name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-                : '🛍️'
-              }
+    <div className="grid gap-8 lg:grid-cols-[18rem_1fr]">
+      <div className="grid content-start gap-4">
+        {summary && summary.count > 0 && (
+          <div className="grid gap-3 rounded-lg bg-surface-muted p-5">
+            <div className="flex items-baseline gap-2">
+              <span className="text-4xl font-semibold tabular-nums">{summary.average.toFixed(1)}</span>
+              <Rating value={summary.average} size={16} />
             </div>
-            {images.length > 1 && (
-              <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
-                {images.map((img: ProductImage) => (
-                  <div
-                    key={img.id}
-                    onClick={() => setSelectedImage(img.image_url)}
-                    style={{
-                      width: '64px', height: '64px', borderRadius: '8px', overflow: 'hidden',
-                      cursor: 'pointer', border: selectedImage === img.image_url ? '2px solid #5C8A2E' : '2px solid transparent',
-                    }}
-                  >
-                    <img src={img.image_url} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-
-          {/* Info */}
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
-            <span style={{ fontSize: '12px', fontWeight: '700', color: '#5C8A2E', textTransform: 'uppercase', letterSpacing: '0.08em' }}>
-              {product.vendors?.store_name}
-            </span>
-
-            <h1 style={{ fontFamily: 'Georgia, serif', fontSize: '32px', fontWeight: '700', color: '#1A2E0E', lineHeight: '1.2' }}>
-              {product.name}
-            </h1>
-
-            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-              <Stars rating={Number(product.rating)} />
-              <span style={{ fontSize: '15px', fontWeight: '600', color: '#1A2E0E' }}>{Number(product.rating).toFixed(1)}</span>
-              <span style={{ fontSize: '14px', color: '#7a8a6e' }}>({product.total_reviews} reviews)</span>
-            </div>
-
-            <div style={{ fontSize: '36px', fontWeight: '700', color: '#2D4A1E', fontFamily: 'Georgia, serif' }}>
-              ${displayPrice.toFixed(2)}
-              {product.compare_price && (
-                <span style={{ fontSize: '20px', color: '#7a8a6e', textDecoration: 'line-through', marginLeft: '12px' }}>
-                  ${Number(product.compare_price).toFixed(2)}
-                </span>
-              )}
-            </div>
-
-            {product.short_description && (
-              <p style={{ fontSize: '16px', color: '#4a5a3e', lineHeight: '1.7', paddingBottom: '20px', borderBottom: '1px solid #e0dbd0' }}>
-                {product.short_description}
-              </p>
-            )}
-
-            {product.categories && (
-              <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                <span style={{ fontSize: '14px', color: '#7a8a6e' }}>{t('shop.allCategories')}:</span>
-                <span style={{ backgroundColor: '#EBF2DE', color: '#2D4A1E', fontSize: '13px', fontWeight: '600', padding: '4px 12px', borderRadius: '20px' }}>
-                  {product.categories.name}
-                </span>
-              </div>
-            )}
-
-            {/* Stock */}
-            <div style={{ fontSize: '14px', color: product.stock > 0 ? '#5C8A2E' : '#e53e3e' }}>
-              {product.stock > 0 ? `✓ ${t('product.stock', { count: product.stock })}` : `✗ ${t('products.outOfStock')}`}
-            </div>
-
-            {/* Quantity selector */}
-            {product.stock > 0 && (
-              <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                <span style={{ fontSize: '14px', fontWeight: '600', color: '#1A2E0E' }}>{t('product.quantity')}:</span>
-                <div style={{ display: 'flex', alignItems: 'center', border: '1.5px solid #e0dbd0', borderRadius: '8px', overflow: 'hidden' }}>
-                  <button
-                    onClick={() => setQty(q => Math.max(1, q - 1))}
-                    style={{ width: '36px', height: '36px', border: 'none', backgroundColor: '#f8faf5', cursor: 'pointer', fontSize: '18px', color: '#2D4A1E', fontWeight: '700' }}
-                  >−</button>
-                  <span style={{ width: '40px', textAlign: 'center', fontSize: '15px', fontWeight: '600', color: '#1A2E0E' }}>{qty}</span>
-                  <button
-                    onClick={() => setQty(q => Math.min(product.stock, q + 1))}
-                    style={{ width: '36px', height: '36px', border: 'none', backgroundColor: '#f8faf5', cursor: 'pointer', fontSize: '18px', color: '#2D4A1E', fontWeight: '700' }}
-                  >+</button>
-                </div>
-              </div>
-            )}
-
-            {/* Variants */}
-            {product.product_variants && product.product_variants.length > 0 && (
-              <div>
-                <p style={{ fontSize: '14px', fontWeight: '600', color: '#1A2E0E', marginBottom: '8px' }}>Options:</p>
-                <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
-                  {product.product_variants.map((v: ProductVariant) => (
-                    <button
-                      key={v.id}
-                      onClick={() => setSelectedVariant(selectedVariant?.id === v.id ? null : v)}
-                      style={{
-                        padding: '6px 14px', borderRadius: '8px', fontSize: '13px', fontWeight: '600', cursor: 'pointer',
-                        border: `2px solid ${selectedVariant?.id === v.id ? '#2D4A1E' : '#e0dbd0'}`,
-                        backgroundColor: selectedVariant?.id === v.id ? '#EBF2DE' : '#fff',
-                        color: '#1A2E0E',
-                      }}
-                    >
-                      {v.option_name}: {v.option_value}
-                      {v.price_adjustment !== 0 && ` (+$${v.price_adjustment.toFixed(2)})`}
-                    </button>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            <div style={{ display: 'flex', gap: '12px', marginTop: '8px' }}>
-              <button
-                onClick={handleAddToCart}
-                disabled={product.stock === 0}
-                style={{
-                  flex: 1, backgroundColor: added ? '#5C8A2E' : '#2D4A1E',
-                  color: '#fff', border: 'none', borderRadius: '10px',
-                  padding: '15px 24px', fontSize: '16px', fontWeight: '600',
-                  cursor: product.stock === 0 ? 'not-allowed' : 'pointer',
-                  opacity: product.stock === 0 ? 0.6 : 1,
-                  boxShadow: '0 4px 14px rgba(45,74,30,0.3)',
-                  transition: 'background-color 0.2s',
-                }}
-              >
-                {added ? t('product.addedToCart') : `🛒 ${t('product.addToCart')}`}
-              </button>
-              <button
-                onClick={() => navigate('/cart')}
-                style={{
-                  backgroundColor: '#fff', color: '#2D4A1E',
-                  border: '1.5px solid #e0dbd0', borderRadius: '10px',
-                  padding: '15px 20px', fontSize: '14px', cursor: 'pointer', fontWeight: '600',
-                }}
-              >
-                {t('product.viewCart')}
-              </button>
-            </div>
-
-            {/* Vendor info */}
-            {product.vendors && (
-              <div
-                onClick={() => product.vendors && navigate(`/vendors/${product.vendors.slug}`)}
-                style={{
-                  marginTop: '8px', padding: '16px', borderRadius: '10px',
-                  border: '1.5px solid #e0dbd0', backgroundColor: '#fff',
-                  cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '12px',
-                }}
-              >
-                <div style={{
-                  width: '40px', height: '40px', borderRadius: '50%',
-                  backgroundColor: '#EBF2DE', display: 'flex', alignItems: 'center',
-                  justifyContent: 'center', fontWeight: '700', color: '#2D4A1E', fontSize: '14px',
-                }}>
-                  {product.vendors.store_name.slice(0, 2).toUpperCase()}
-                </div>
-                <div>
-                  <div style={{ fontSize: '14px', fontWeight: '600', color: '#1A2E0E' }}>
-                    {product.vendors.store_name}
-                    {product.vendors.verified && <span style={{ color: '#5C8A2E', marginLeft: '6px' }}>✓</span>}
-                  </div>
-                  <div style={{ fontSize: '12px', color: '#7a8a6e' }}>★ {Number(product.vendors.rating).toFixed(1)} · {t('vendors.visitStore')} {isRTL ? '←' : '→'}</div>
-                </div>
-              </div>
-            )}
-
-            <button onClick={() => navigate(-1)} style={{ backgroundColor: 'transparent', color: '#7a8a6e', border: 'none', fontSize: '14px', cursor: 'pointer', textAlign: isRTL ? 'right' : 'left', padding: '0' }}>
-              {isRTL ? '→' : '←'} {t('common.back')}
-            </button>
-          </div>
-        </div>
-
-        {/* Description */}
-        {product.description && (
-          <div style={{ marginBottom: '48px', backgroundColor: '#fff', borderRadius: '12px', padding: '28px', border: '1.5px solid #e0dbd0' }}>
-            <h2 style={{ fontFamily: 'Georgia, serif', fontSize: '20px', fontWeight: '700', color: '#1A2E0E', marginBottom: '16px' }}>{t('product.description')}</h2>
-            <p style={{ fontSize: '15px', color: '#4a5a3e', lineHeight: '1.8' }}>{product.description}</p>
-          </div>
-        )}
-
-        {/* Related */}
-        {related.length > 0 && (
-          <div>
-            <h2 style={{ fontFamily: 'Georgia, serif', fontSize: '24px', fontWeight: '700', color: '#1A2E0E', marginBottom: '24px' }}>
-              {t('product.relatedProducts')}
-            </h2>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(240px, 1fr))', gap: '18px' }}>
-              {related.map((p) => {
-                const img = p.product_images?.find(i => i.is_primary)?.image_url || p.product_images?.[0]?.image_url
+            <ul className="grid gap-1.5">
+              {(['5', '4', '3', '2', '1'] as const).map(stars => {
+                const count = summary.breakdown[stars]
                 return (
-                  <div
-                    key={p.id}
-                    onClick={() => navigate(`/product/${p.slug}`)}
-                    style={{ backgroundColor: '#fff', border: '1.5px solid #e0dbd0', borderRadius: '14px', overflow: 'hidden', cursor: 'pointer', transition: 'all 0.2s' }}
-                    onMouseEnter={e => { e.currentTarget.style.transform = 'translateY(-4px)'; e.currentTarget.style.boxShadow = '0 8px 28px rgba(0,0,0,0.09)' }}
-                    onMouseLeave={e => { e.currentTarget.style.transform = 'translateY(0)'; e.currentTarget.style.boxShadow = 'none' }}
-                  >
-                    <div style={{ height: '120px', backgroundColor: '#EBF2DE', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '48px' }}>
-                      {img ? <img src={img} alt={p.name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} loading="lazy" /> : '🛍️'}
-                    </div>
-                    <div style={{ padding: '14px' }}>
-                      <h3 style={{ fontSize: '14px', fontWeight: '600', color: '#1A2E0E', marginBottom: '8px', fontFamily: 'Georgia, serif' }}>{p.name}</h3>
-                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                        <span style={{ fontSize: '16px', fontWeight: '700', color: '#1A2E0E', fontFamily: 'Georgia, serif' }}>${Number(p.price).toFixed(2)}</span>
-                        <span style={{ fontSize: '12px', color: '#A3C46C' }}>★ {Number(p.rating).toFixed(1)}</span>
-                      </div>
-                    </div>
-                  </div>
+                  <li key={stars} className="flex items-center gap-2 text-sm">
+                    <span className="w-14 shrink-0 text-fg-muted">{t('ui.stars', { count: Number(stars) })}</span>
+                    <span className="h-2 flex-1 overflow-hidden rounded-full bg-surface-sunken">
+                      <span className="block h-full rounded-full bg-star" style={{ width: `${(count / summary.count) * 100}%` }} />
+                    </span>
+                    <span className="w-6 text-end tabular-nums text-fg-subtle">{count}</span>
+                  </li>
                 )
               })}
-            </div>
+            </ul>
           </div>
         )}
-
+        {user ? <ReviewForm productId={product.id} onPosted={reload} /> : (
+          <p className="text-sm text-fg-muted">{t('product.reviewOnlyBuyers')}</p>
+        )}
+      </div>
+      <div className="grid content-start gap-4">
+        {loading && !data ? (
+          Array.from({ length: 2 }, (_, i) => <Skeleton key={i} className="h-28 rounded-lg" />)
+        ) : !data?.data.length ? (
+          <EmptyState icon={<MessageSquare />} title={t('product.noReviews')} message={t('product.noReviewsText')} className="py-10" />
+        ) : (
+          <>
+            <ul className="grid gap-4">
+              {data.data.map(review => (
+                <li key={review.id} className="grid gap-2 border-b border-border pb-4 last:border-0">
+                  <div className="flex items-center gap-3">
+                    <Avatar name={review.author_name} size="sm" />
+                    <div className="grid">
+                      <span className="text-sm font-semibold">{review.author_name}</span>
+                      <span className="text-xs text-fg-subtle">{dateFormat.format(new Date(review.created_at))}</span>
+                    </div>
+                    <Rating value={review.rating} size={14} className="ms-auto" />
+                  </div>
+                  {review.title && <p className="font-semibold">{review.title}</p>}
+                  {review.body && <p className="text-sm text-fg-muted">{review.body}</p>}
+                </li>
+              ))}
+            </ul>
+            <Pagination page={page} total={data.total} limit={data.limit} onPageChange={setPage} />
+          </>
+        )}
       </div>
     </div>
   )
 }
 
-export default ProductPage
+function ProductSkeleton() {
+  return (
+    <Container className="grid gap-8 py-8 md:grid-cols-2">
+      <Skeleton className="aspect-square h-auto rounded-lg" />
+      <div className="grid content-start gap-4">
+        <Skeleton className="h-4 w-1/3" />
+        <Skeleton className="h-9 w-4/5" />
+        <Skeleton className="h-5 w-1/4" />
+        <Skeleton className="h-10 w-1/3" />
+        <Skeleton className="h-12 w-full" />
+      </div>
+    </Container>
+  )
+}
+
+export default function ProductPage() {
+  const { slug = '' } = useParams()
+  const { t } = useTranslation()
+  const navigate = useNavigate()
+  const addItem = useCartStore(s => s.addItem)
+  const { data: product, loading, error, reload } = useAsync(signal => catalog.product(slug, signal), [slug])
+  const related = useAsync(
+    signal => (product?.category_id ? catalog.related(product.category_id, product.id, signal) : Promise.resolve([])),
+    [product?.id],
+  )
+  const [qty, setQty] = useState(1)
+  const [selected, setSelected] = useState<Record<string, ProductVariant>>({})
+
+  usePageTitle(product?.name ?? (loading ? undefined : t('product.notFound')))
+  useEffect(() => { setQty(1); setSelected({}) }, [slug])
+
+  // Variants arrive as flat rows; group them into option sets (e.g. Size: S/M/L).
+  const optionGroups = useMemo(() => {
+    const groups = new Map<string, ProductVariant[]>()
+    for (const variant of product?.product_variants ?? []) {
+      groups.set(variant.option_name, [...(groups.get(variant.option_name) ?? []), variant])
+    }
+    return [...groups.entries()]
+  }, [product])
+
+  if (loading) return <ProductSkeleton />
+  if (error) return <Container className="py-16"><ErrorState onRetry={reload} /></Container>
+  if (!product) {
+    return (
+      <Container className="py-16">
+        <EmptyState icon={<PackageX />} title={t('product.notFound')} message={t('product.notFoundText')} action={() => navigate('/shop')} actionLabel={t('notFound.shop')} />
+      </Container>
+    )
+  }
+
+  const vendor = product.vendor ?? product.vendors
+  // The cart and price follow the first selected option; multi-option products
+  // are rare on SouQna today.
+  const variant = Object.values(selected)[0] ?? null
+  const price = product.price + (variant?.price_adjustment ?? 0)
+  const stock = variant ? variant.stock : product.stock
+  const soldOut = stock <= 0
+  const needsVariant = optionGroups.length > 0 && !variant
+
+  const addToCart = () => {
+    addItem({ ...toCartProduct(product), price }, qty, variant)
+    toast({
+      title: t('product.added'),
+      description: t('product.addedText', { name: product.name }),
+      tone: 'success',
+      action: { label: t('product.viewCart'), onClick: () => navigate('/cart') },
+    })
+  }
+
+  const buyButton = (
+    <Button size="lg" variant="accent" className="flex-1" startIcon={<ShoppingBag />} disabled={soldOut || needsVariant} onClick={addToCart}>
+      {soldOut ? t('product.outOfStock') : t('product.addToCart')}
+    </Button>
+  )
+
+  return (
+    <>
+      <ProductJsonLd product={product} />
+      <Container className="grid gap-6 py-6 sm:py-8">
+        <Breadcrumbs items={[
+          { label: t('product.home'), to: '/' },
+          { label: t('product.shop'), to: '/shop' },
+          ...(product.category ? [{ label: product.category.name, to: `/shop?category=${product.category.id}` }] : []),
+          { label: product.name },
+        ]} />
+
+        <div className="grid gap-8 md:grid-cols-2 lg:gap-12">
+          <ImageGallery images={productImages(product)} className="md:sticky md:top-24 md:self-start" />
+
+          <div className="grid content-start gap-5">
+            <div className="grid gap-2">
+              {vendor && (
+                <Link to={`/vendors/${vendor.slug}`} className="inline-flex w-fit items-center gap-1.5 text-sm font-medium text-fg-muted hover:text-fg">
+                  {vendor.store_name}
+                  {vendor.verified && <BadgeCheck aria-label={t('product.verified')} className="size-4 text-primary" />}
+                </Link>
+              )}
+              <h1 className="text-3xl font-semibold text-balance">{product.name}</h1>
+              <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-fg-muted">
+                {product.total_reviews > 0 && <Rating value={product.rating} count={product.total_reviews} showValue size={16} />}
+                {product.total_sold > 0 && <span>{t('product.sold', { count: product.total_sold })}</span>}
+              </div>
+            </div>
+
+            <PriceTag price={price} comparePrice={product.compare_price} size="lg" />
+
+            {product.short_description && <p className="text-fg-muted">{product.short_description}</p>}
+
+            {optionGroups.map(([name, options]) => (
+              <fieldset key={name} className="grid gap-2">
+                <legend className="text-sm font-semibold">{name}</legend>
+                <div className="flex flex-wrap gap-2 pt-2">
+                  {options.map(option => {
+                    const active = selected[name]?.id === option.id
+                    return (
+                      <button
+                        key={option.id}
+                        type="button"
+                        aria-pressed={active}
+                        disabled={option.stock <= 0}
+                        onClick={() => setSelected({ [name]: option })}
+                        className={cn(
+                          'min-w-12 rounded-md border px-3.5 py-2 text-sm font-medium transition-colors disabled:cursor-not-allowed disabled:line-through disabled:opacity-40',
+                          active ? 'border-primary bg-primary-soft text-primary-soft-fg' : 'border-border-strong hover:border-primary',
+                        )}
+                      >
+                        {option.option_value}
+                      </button>
+                    )
+                  })}
+                </div>
+              </fieldset>
+            ))}
+
+            <div>
+              {soldOut ? <Badge tone="neutral">{t('product.outOfStock')}</Badge>
+                : stock <= 5 ? <Badge tone="warning">{t('product.lowStock', { count: stock })}</Badge>
+                  : <Badge tone="success">{t('product.inStock')}</Badge>}
+            </div>
+
+            <div className="hidden flex-wrap items-center gap-3 sm:flex">
+              <QuantityStepper value={qty} onChange={setQty} max={Math.max(1, Math.min(stock, 99))} disabled={soldOut} />
+              {buyButton}
+              <WishlistButton productId={product.id} variant="outline" />
+            </div>
+
+            <ul className="grid gap-2.5 rounded-lg border border-border p-4 text-sm">
+              <li className="flex items-center gap-2.5"><Truck aria-hidden className="size-4 text-fg-subtle" />{t('product.delivery')}</li>
+              <li className="flex items-center gap-2.5"><Wallet aria-hidden className="size-4 text-fg-subtle" />{t('product.payOnDelivery')}</li>
+            </ul>
+
+            {vendor && (
+              <div className="flex items-center gap-3 rounded-lg bg-surface-muted p-4">
+                <Avatar name={vendor.store_name} src={vendor.logo_url} shape="square" />
+                <div className="grid min-w-0 flex-1">
+                  <span className="text-xs text-fg-muted">{t('product.soldBy')}</span>
+                  <span className="truncate font-semibold">{vendor.store_name}</span>
+                </div>
+                <Button asChild variant="outline" size="sm"><Link to={`/vendors/${vendor.slug}`}>{t('product.visitStore')}</Link></Button>
+              </div>
+            )}
+          </div>
+        </div>
+
+        <Tabs defaultValue="description" className="pt-6">
+          <TabsList>
+            <TabsTrigger value="description">{t('product.description')}</TabsTrigger>
+            <TabsTrigger value="reviews">{t('product.reviews')} ({product.total_reviews})</TabsTrigger>
+          </TabsList>
+          <TabsContent value="description">
+            <p className="max-w-prose whitespace-pre-line text-fg-muted">{product.description || product.short_description || '—'}</p>
+          </TabsContent>
+          <TabsContent value="reviews"><Reviews product={product} /></TabsContent>
+        </Tabs>
+
+        {!!related.data?.length && (
+          <section className="grid gap-5 border-t border-border pt-10">
+            <h2 className="text-2xl font-semibold">{t('product.related')}</h2>
+            <ProductGrid products={related.data} />
+          </section>
+        )}
+      </Container>
+
+      {/* Phones: keep the purchase action in reach while scrolling. */}
+      <div className="fixed inset-x-0 bottom-[calc(3.75rem+env(safe-area-inset-bottom))] z-30 border-t border-border bg-surface/95 px-4 py-3 backdrop-blur-md sm:hidden">
+        <div className="flex items-center gap-2">
+          <QuantityStepper value={qty} onChange={setQty} max={Math.max(1, Math.min(stock, 99))} size="sm" disabled={soldOut} />
+          {buyButton}
+          <WishlistButton productId={product.id} variant="outline" />
+        </div>
+      </div>
+      <div aria-hidden className="h-20 sm:hidden" />
+    </>
+  )
+}

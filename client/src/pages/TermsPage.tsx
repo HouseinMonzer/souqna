@@ -1,10 +1,9 @@
-import { useNavigate } from 'react-router-dom'
+import { useTranslation } from 'react-i18next'
+import { LegalPage, type LegalSection } from '../components/layout/LegalPage'
 
-function TermsPage() {
-  const navigate = useNavigate()
-  document.title = 'Terms of Service | SouqNa'
-
-  const sections = [
+export default function TermsPage() {
+  const { t } = useTranslation()
+  const sections: LegalSection[] = [
     {
       title: '1. Acceptance of Terms',
       content: `By accessing and using SouqNa (souqna.lb), you accept and agree to be bound by these Terms of Service and all applicable laws and regulations. If you do not agree with any of these terms, you are prohibited from using or accessing this site.\n\nWe reserve the right to update these terms at any time. Continued use of the platform constitutes your acceptance of any modifications.`,
@@ -42,46 +41,5 @@ function TermsPage() {
       content: `For questions about these Terms, contact us:\n\nSouqNa Lebanon\nEmail: legal@souqna.lb\nPhone: +961 1 234 567`,
     },
   ]
-
-  return (
-    <div style={{ backgroundColor: '#F7F2E8', minHeight: '100vh' }}>
-      <div style={{ backgroundColor: '#2D4A1E', padding: '48px 24px' }}>
-        <div style={{ maxWidth: '760px', margin: '0 auto' }}>
-          <h1 style={{ color: '#F7F2E8', fontFamily: 'Georgia, serif', fontSize: '36px', fontWeight: '700', marginBottom: '8px' }}>Terms of Service</h1>
-          <p style={{ color: 'rgba(247,242,232,0.65)', fontSize: '14px' }}>Last updated: January 1, 2025</p>
-        </div>
-      </div>
-
-      <div style={{ maxWidth: '760px', margin: '0 auto', padding: '48px 24px' }}>
-        <div style={{ backgroundColor: '#EBF2DE', borderRadius: '12px', padding: '20px 24px', marginBottom: '36px', border: '1px solid #c8d8a8' }}>
-          <p style={{ fontSize: '15px', color: '#2D4A1E', lineHeight: '1.7' }}>
-            Please read these Terms of Service carefully before using the SouqNa platform. By using our service, you confirm that you are at least 18 years old and agree to these terms.
-          </p>
-        </div>
-
-        {sections.map((s, i) => (
-          <div key={i} style={{ marginBottom: '32px' }}>
-            <h2 style={{ fontFamily: 'Georgia, serif', fontSize: '20px', fontWeight: '700', color: '#1A2E0E', marginBottom: '12px' }}>
-              {s.title}
-            </h2>
-            <div style={{ fontSize: '15px', color: '#4a5a3e', lineHeight: '1.8', whiteSpace: 'pre-line' }}>
-              {s.content}
-            </div>
-            {i < sections.length - 1 && <div style={{ borderBottom: '1px solid #e0dbd0', marginTop: '28px' }} />}
-          </div>
-        ))}
-
-        <div style={{ marginTop: '48px', textAlign: 'center' }}>
-          <p style={{ fontSize: '14px', color: '#7a8a6e', marginBottom: '16px' }}>
-            Questions? We're happy to clarify anything.
-          </p>
-          <button onClick={() => navigate('/contact')} style={{ backgroundColor: '#2D4A1E', color: '#fff', border: 'none', borderRadius: '8px', padding: '12px 28px', fontSize: '14px', fontWeight: '600', cursor: 'pointer' }}>
-            Contact Support
-          </button>
-        </div>
-      </div>
-    </div>
-  )
+  return <LegalPage title={t('legal.terms')} sections={sections} />
 }
-
-export default TermsPage
