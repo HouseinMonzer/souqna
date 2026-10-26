@@ -177,6 +177,20 @@ describe('order tracking and fulfilment', () => {
     assert.equal(again.status, 409)
   })
 
+  it('restores stock only once when two cancellations race', async () => {
+    const product = await createProduct(vendorA.user.vendor.id, { stock: 4 })
+    const placed = await placeOrder(customer.cookie, [{ product_id: product.id, quantity: 3 }])
+    const itemId = placed.body.data.order_items[0].id
+    const results = await Promise.all([
+      setStatus(vendorA, itemId, 'cancelled'),
+      setStatus(vendorA, itemId, 'cancelled'),
+    ])
+    assert.deepEqual(results.map(r => r.status).sort(), [200, 409])
+    const after = await prisma.product.findUnique({ where: { id: product.id } })
+    assert.equal(after.stock, 4)
+    assert.equal(after.totalSold, 0)
+  })
+
   it('derives the order status from its items and records history', async () => {
     await setStatus(vendorA, itemFor(productA.id).id, 'shipped')
     let stored = await prisma.order.findUnique({ where: { id: order.id }, include: { statusHistory: true } })

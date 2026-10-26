@@ -333,14 +333,17 @@ patch('/vendor/orders/:itemId/status', {
   }
 
   const updated = await prisma.$transaction(async tx => {
-    const result = await tx.orderItem.update({
-      where: { id: item.id },
+    // Conditional transition: if a concurrent request already moved the item to
+    // a final status, this matches nothing and the stock is not restored twice.
+    const { count } = await tx.orderItem.updateMany({
+      where: { id: item.id, vendorStatus: { notIn: [...TERMINAL_STATUSES] } },
       data: {
         vendorStatus: input.status,
         ...(input.trackingNumber !== undefined ? { trackingNumber: sanitizeOrNull(input.trackingNumber) } : {}),
       },
-      include: { order: true, vendor: true },
     })
+    if (!count) throw new HttpError(409, 'This item was already updated. Refresh and try again.')
+    const result = await tx.orderItem.findUnique({ where: { id: item.id }, include: { order: true, vendor: true } })
 
     if (input.status === 'cancelled') {
       const data = { stock: { increment: item.quantity } }

@@ -200,6 +200,8 @@ if (env.GOOGLE_CLIENT_ID) {
     clientID: env.GOOGLE_CLIENT_ID,
     clientSecret: env.GOOGLE_CLIENT_SECRET,
     callbackURL: `${API_BASE}/api/auth/google/callback`,
+    // Ties the callback to the browser session that started sign-in (prevents login CSRF).
+    state: true,
   }, verify('googleId', p => p._json?.email_verified === true || p.emails?.[0]?.verified === true)))
 }
 
@@ -209,6 +211,7 @@ if (env.FACEBOOK_APP_ID) {
     clientSecret: env.FACEBOOK_APP_SECRET,
     callbackURL: `${API_BASE}/api/auth/facebook/callback`,
     profileFields: ['id', 'displayName', 'emails', 'photos'],
+    state: true,
     // Facebook does not report whether the email is verified.
   }, verify('facebookId', () => false)))
 }

@@ -2,7 +2,7 @@ const nodemailer = require('nodemailer')
 const env = require('../config/env')
 const { logger } = require('./logger')
 
-const CLIENT_URL = process.env.CLIENT_URL || 'http://localhost:5173'
+const { CLIENT_URL } = env
 const EMAIL_FROM = process.env.EMAIL_FROM || '"SouQna" <noreply@souqna.com>'
 
 const HTML_ESCAPES = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }
@@ -16,7 +16,7 @@ async function getTransporter() {
 
   if (env.NODE_ENV === 'test') {
     _transporter = nodemailer.createTransport({ jsonTransport: true })
-  } else if (process.env.SMTP_HOST) {
+  } else if (env.SMTP_HOST) {
     _transporter = nodemailer.createTransport({
       host: process.env.SMTP_HOST,
       port: Number(process.env.SMTP_PORT || 587),

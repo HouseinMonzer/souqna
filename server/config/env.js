@@ -16,6 +16,8 @@ const schema = z.object({
   SESSION_SECRET: z.string().min(32).optional(),
   CLIENT_ORIGIN: optional,
   API_URL: z.string().url().optional(),
+  CLIENT_URL: z.string().url().optional(),
+  SMTP_HOST: optional,
   UPLOADTHING_TOKEN: optional,
   GOOGLE_CLIENT_ID: optional,
   GOOGLE_CLIENT_SECRET: optional,
@@ -23,7 +25,9 @@ const schema = z.object({
   FACEBOOK_APP_SECRET: optional,
 }).superRefine((env, ctx) => {
   if (env.NODE_ENV !== 'production') return
-  for (const key of ['JWT_SECRET', 'SESSION_SECRET', 'CLIENT_ORIGIN', 'API_URL']) {
+  // SMTP_HOST: without it verification mail goes to a throwaway test inbox and
+  // nobody can finish signing up.
+  for (const key of ['JWT_SECRET', 'SESSION_SECRET', 'CLIENT_ORIGIN', 'API_URL', 'SMTP_HOST']) {
     if (!env[key]) ctx.addIssue({ code: 'custom', path: [key], message: 'Required in production' })
   }
   if (env.GOOGLE_CLIENT_ID && !env.GOOGLE_CLIENT_SECRET) {
@@ -54,4 +58,6 @@ module.exports = {
   JWT_SECRET: env.JWT_SECRET || 'souqna-dev-jwt-secret-change-me-0000000000',
   SESSION_SECRET: env.SESSION_SECRET || 'souqna-dev-session-secret-change-me-00000000',
   CORS_ORIGINS: env.CLIENT_ORIGIN ? env.CLIENT_ORIGIN.split(',').map(o => o.trim()).filter(Boolean) : null,
+  // Links in emails: explicit CLIENT_URL, else the first allowed client origin.
+  CLIENT_URL: env.CLIENT_URL || env.CLIENT_ORIGIN?.split(',')[0]?.trim() || 'http://localhost:5173',
 }

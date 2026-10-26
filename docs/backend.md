@@ -88,6 +88,10 @@ npx prisma migrate resolve --applied 00000000000000_baseline
 npx prisma migrate deploy
 ```
 
+Railway must also have `JWT_SECRET`, `SESSION_SECRET` (32+ characters each),
+`CLIENT_ORIGIN`, `API_URL` and `SMTP_HOST` (+ `SMTP_USER`/`SMTP_PASS`): the
+server refuses to start in production without them.
+
 Then deploy the code. Order matters: the Phase 1 code expects the new tables
 and `DECIMAL` columns.
 
