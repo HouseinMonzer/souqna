@@ -164,15 +164,12 @@ export default function VendorProfilePage() {
                 {vendor.phone && <div><dt className="font-semibold">{t('vendors.contact')}</dt><dd className="inline-flex items-center gap-1.5 text-fg-muted"><Phone aria-hidden className="size-3.5" /><bdi>{vendor.phone}</bdi></dd></div>}
                 {links.length > 0 && (
                   <div className="flex flex-wrap gap-2 pt-1">
-                    {links.map(link => {
-                      const Icon = PlatformIcon[link.platform]
-                      return (
+                    {links.map(link => (
                         <a key={link.platform} href={link.href} target="_blank" rel="noopener noreferrer" aria-label={link.label}
                           className="inline-flex size-9 items-center justify-center rounded-full border border-border bg-surface text-fg-muted hover:text-fg">
-                          {Icon ? <Icon size={16} /> : link.label[0]}
+                          <PlatformIcon platform={link.platform} size={16} fallback={link.label[0]} />
                         </a>
-                      )
-                    })}
+                    ))}
                   </div>
                 )}
               </dl>

@@ -482,6 +482,23 @@ describe('subscription lifecycle', () => {
   })
 })
 
+describe('contact form', () => {
+  it('emails support with escaped content', async () => {
+    const before = sentMail.length
+    const res = await request(app).post('/api/contact').send({ name: 'Lina', email: 'lina@test.local', message: 'Hello <b>there</b>, I have a question.' })
+    assert.equal(res.status, 202)
+    await new Promise(resolve => setTimeout(resolve, 20))
+    const mail = sentMail.slice(before).find(m => m.to === 'support@souqna.test')
+    assert.ok(mail)
+    assert.ok(!mail.html.includes('<b>there</b>'))
+  })
+
+  it('validates the message', async () => {
+    const res = await request(app).post('/api/contact').send({ name: 'L', email: 'nope', message: 'short' })
+    assert.equal(res.status, 400)
+  })
+})
+
 describe('operations', () => {
   it('reports readiness with a database check', async () => {
     const res = await request(app).get('/api/ready')

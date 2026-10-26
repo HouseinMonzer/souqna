@@ -46,6 +46,8 @@ export const ImagePresets = {
   product: { maxWidth: 1200, maxHeight: 1200, quality: 0.85, aspectRatio: 1,    background: '#ffffff' },
   cover:   { maxWidth: 1920, maxHeight: 720,  quality: 0.85, aspectRatio: 16/6, background: '#1A2E0E' },
   logo:    { maxWidth: 512,  maxHeight: 512,  quality: 0.9,  aspectRatio: 1,    background: '#ffffff' },
+  // Receipts and documents keep their shape.
+  document: { maxWidth: 1600, maxHeight: 1600, quality: 0.85 },
 } as const
 
 export interface CropOptions extends CompressOptions {

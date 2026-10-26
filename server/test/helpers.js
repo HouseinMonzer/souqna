@@ -22,6 +22,7 @@ process.env.DIRECT_URL = url.toString()
 process.env.JWT_SECRET = 'test-jwt-secret-that-is-at-least-32-characters'
 process.env.SESSION_SECRET = 'test-session-secret-that-is-at-least-32-chars'
 process.env.CLIENT_ORIGIN = 'http://allowed.test'
+process.env.SUPPORT_EMAIL = 'support@souqna.test'
 delete process.env.UPLOADTHING_TOKEN
 
 execFileSync('npx', ['prisma', 'migrate', 'deploy'], { cwd: ROOT, env: process.env, stdio: 'ignore' })

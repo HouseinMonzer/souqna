@@ -6,6 +6,7 @@ export interface Analytics {
   totalCustomers: number
   totalOrders: number
   totalRevenue: number
+  generatedAt: string
   ordersLast7Days: { day: string; count: number }[]
   revenueByMonth: { month: number; year: number; revenue: number }[]
   topVendors: { id: string; storeName: string; orderCount: number; productCount: number; revenue: number }[]

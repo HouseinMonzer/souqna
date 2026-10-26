@@ -67,6 +67,7 @@ get('/admin/analytics', { summary: 'Dashboard metrics', ...admin }, async (_req,
       totalCustomers,
       totalOrders,
       totalRevenue: toNumber(revenue._sum.total) || 0,
+      generatedAt: now.toISOString(),
       ordersLast7Days: dayCount.map((count, i) => ({ day: String(i), count })),
       revenueByMonth: [...monthMap.values()],
       topVendors: topVendors.map(vendor => ({

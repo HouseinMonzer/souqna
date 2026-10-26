@@ -99,7 +99,6 @@ function App() {
           <Route path="/verify-email" element={<AuthLayout><VerifyEmailPage /></AuthLayout>} />
           <Route path="/auth/callback" element={<AuthCallbackPage />} />
           {DesignSystemPage && <Route path="/design" element={<DesignSystemPage />} />}
-          <Route path="/admin" element={<RequireAuth requireRole="admin"><AdminDashboard /></RequireAuth>} />
           <Route element={<MainLayout />}>
             <Route path="/" element={<HomePage />} />
             <Route path="/shop" element={<ShopPage />} />
@@ -108,7 +107,8 @@ function App() {
             <Route path="/vendors" element={<VendorsPage />} />
             <Route path="/vendors/:slug" element={<VendorProfilePage />} />
             <Route path="/dashboard" element={<RequireAuth><DashboardPage /></RequireAuth>} />
-            <Route path="/subscribe" element={<SubscriptionPage />} />
+            <Route path="/admin" element={<RequireAuth requireRole="admin"><AdminDashboard /></RequireAuth>} />
+            <Route path="/subscribe" element={<RequireAuth><SubscriptionPage /></RequireAuth>} />
             <Route path="/checkout/:vendorId" element={<RequireAuth><CheckoutPage /></RequireAuth>} />
             <Route path="/about" element={<AboutPage />} />
             <Route path="/contact" element={<ContactPage />} />

@@ -7,7 +7,7 @@ const { applySecurity } = require('./middleware/security')
 const { requestLogger } = require('./middleware/requestLogger')
 const { notFoundHandler, errorHandler } = require('./middleware/error')
 
-const modules = ['auth', 'catalog', 'vendor', 'orders', 'reviews', 'wishlist', 'addresses', 'notifications', 'subscriptions', 'admin']
+const modules = ['auth', 'catalog', 'vendor', 'orders', 'reviews', 'wishlist', 'addresses', 'notifications', 'subscriptions', 'admin', 'contact']
 
 const app = express()
 

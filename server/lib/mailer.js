@@ -263,8 +263,19 @@ function sendSubscriptionExpired(to, { storeName }) {
   return send(to, 'Your SouQna subscription has expired', layout('Subscription Expired', body))
 }
 
+function sendContactMessage(to, { name, email, subject, message }) {
+  const body = `
+    <h2 style="margin:0 0 8px;color:#1A2E0E;font-family:Georgia,serif;">New message from the contact form</h2>
+    <p style="margin:0 0 4px;color:#4a5a3e;font-size:14px;"><strong>From:</strong> ${esc(name)} &lt;${esc(email)}&gt;</p>
+    ${subject ? `<p style="margin:0 0 16px;color:#4a5a3e;font-size:14px;"><strong>Subject:</strong> ${esc(subject)}</p>` : ''}
+    <p style="margin:0;color:#1A2E0E;font-size:15px;white-space:pre-wrap;">${esc(message)}</p>
+  `
+  return send(to, `Contact form: ${subject || name}`.slice(0, 150), layout('Contact message', body))
+}
+
 module.exports = {
   sentMail,
+  sendContactMessage,
   sendSubscriptionExpiring,
   sendSubscriptionExpired,
   sendVerificationEmail,

@@ -18,6 +18,7 @@ const schema = z.object({
   API_URL: z.string().url().optional(),
   CLIENT_URL: z.string().url().optional(),
   SMTP_HOST: optional,
+  SUPPORT_EMAIL: z.string().email().optional(),
   UPLOADTHING_TOKEN: optional,
   GOOGLE_CLIENT_ID: optional,
   GOOGLE_CLIENT_SECRET: optional,
