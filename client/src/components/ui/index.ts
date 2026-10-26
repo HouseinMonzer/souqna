@@ -13,7 +13,7 @@ export {
 export { EmptyState } from './empty-state'
 export { FormField } from './form-field'
 export { ImageGallery, type GalleryImage } from './image-gallery'
-export { Input, Select, Textarea } from './input'
+export { Input, Select, Textarea, type InputProps } from './input'
 export { Label } from './label'
 export { Pagination } from './pagination'
 export { PriceTag, formatPrice } from './price-tag'

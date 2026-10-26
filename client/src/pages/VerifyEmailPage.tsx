@@ -1,90 +1,50 @@
-import { useEffect, useState } from 'react'
-import { useNavigate, useSearchParams } from 'react-router-dom'
+import { useEffect, useRef, useState } from 'react'
+import { Link, useNavigate, useSearchParams } from 'react-router-dom'
+import { useTranslation } from 'react-i18next'
+import { CircleCheckBig, CircleX } from 'lucide-react'
+import { Button, Spinner } from '../components/ui'
+import { AuthShell } from '../components/auth/AuthShell'
 import { apiFetch } from '../lib/api'
+import { postLoginPath } from '../lib/authRedirect'
 import { useAuthStore } from '../store/authStore'
+import { usePageTitle } from '../hooks/usePageTitle'
 import type { AuthUser } from '../types/database.types'
 
-type State = 'loading' | 'success' | 'error'
-
-const s = {
-  page: { backgroundColor: '#F7F2E8', minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '24px', boxSizing: 'border-box' as const },
-  card: { width: '100%', maxWidth: 420, backgroundColor: '#fff', border: '1.5px solid #e0dbd0', borderRadius: 16, padding: '40px 36px', boxSizing: 'border-box' as const, boxShadow: '0 10px 34px rgba(45,74,30,0.08)', textAlign: 'center' as const },
-  logo: { fontFamily: 'Georgia, serif', fontSize: 28, fontWeight: 700 },
-  icon: { fontSize: 56, marginBottom: 12 },
-  h1: { fontFamily: 'Georgia, serif', fontSize: 22, color: '#1A2E0E', margin: '12px 0 8px' },
-  p: { color: '#7a8a6e', fontSize: 15, lineHeight: 1.6, margin: '0 0 24px' },
-  spinner: { width: 44, height: 44, border: '3px solid #e0dbd0', borderTopColor: '#5C8A2E', borderRadius: '50%', animation: 'spin 0.8s linear infinite', margin: '12px auto 20px' },
-  btn: { display: 'inline-block', padding: '12px 28px', backgroundColor: '#5C8A2E', color: '#fff', border: 'none', borderRadius: 10, fontSize: 15, fontWeight: 700, cursor: 'pointer', textDecoration: 'none' },
-}
-
-function VerifyEmailPage() {
-  const [params] = useSearchParams()
-  const [state, setState] = useState<State>('loading')
-  const [errorMsg, setErrorMsg] = useState('')
-  const setUser = useAuthStore(s => s.setUser)
+export default function VerifyEmailPage() {
+  const { t } = useTranslation()
   const navigate = useNavigate()
+  const [params] = useSearchParams()
+  const setUser = useAuthStore(s => s.setUser)
+  const [state, setState] = useState<'verifying' | 'done' | 'failed'>('verifying')
+  const started = useRef(false)
+  usePageTitle(t(state === 'failed' ? 'auth.verifyFailed' : state === 'done' ? 'auth.verified' : 'auth.verifying'))
 
   useEffect(() => {
+    // Tokens are single-use, so guard against StrictMode's double effect.
+    if (started.current) return
+    started.current = true
     const token = params.get('token')
-    if (!token) {
-      setState('error')
-      setErrorMsg('No verification token found in the link.')
-      return
-    }
-
+    if (!token) { setState('failed'); return }
     apiFetch<{ user: AuthUser }>(`/api/auth/verify-email?token=${encodeURIComponent(token)}`)
       .then(({ user }) => {
         setUser(user)
-        setState('success')
-        // Auto-redirect after 2s
-        setTimeout(() => {
-          if (user.profile?.role === 'admin') navigate('/admin', { replace: true })
-          else if (user.profile?.role === 'vendor') navigate('/dashboard', { replace: true })
-          else navigate('/', { replace: true })
-        }, 2000)
+        setState('done')
+        setTimeout(() => navigate(postLoginPath(user), { replace: true }), 1200)
       })
-      .catch((err: unknown) => {
-        setState('error')
-        setErrorMsg(err instanceof Error ? err.message : 'Verification failed. The link may have expired.')
-      })
-  }, []) // eslint-disable-line react-hooks/exhaustive-deps
+      .catch(() => setState('failed'))
+  }, [params, navigate, setUser])
 
   return (
-    <div style={s.page}>
-      <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
-      <div style={s.card}>
-        <div>
-          <span style={{ ...s.logo, color: '#2D4A1E' }}>Souq</span>
-          <span style={{ ...s.logo, color: '#5C8A2E' }}>na</span>
+    <AuthShell title={t(state === 'failed' ? 'auth.verifyFailed' : state === 'done' ? 'auth.verified' : 'auth.verifying')}>
+      {state === 'verifying' && <Spinner size={32} className="text-primary" label={t('auth.verifying')} />}
+      {state === 'done' && <CircleCheckBig aria-hidden className="size-12 text-success" />}
+      {state === 'failed' && (
+        <div className="grid gap-4">
+          <CircleX aria-hidden className="size-12 text-danger" />
+          <p className="text-fg-muted">{t('auth.verifyFailedText')}</p>
+          <Button asChild className="w-fit"><Link to="/login">{t('auth.backToLogin')}</Link></Button>
         </div>
-
-        {state === 'loading' && (
-          <>
-            <div style={s.spinner} />
-            <h1 style={s.h1}>Verifying your email…</h1>
-            <p style={s.p}>Please wait a moment.</p>
-          </>
-        )}
-
-        {state === 'success' && (
-          <>
-            <div style={s.icon}>✅</div>
-            <h1 style={s.h1}>Email verified!</h1>
-            <p style={s.p}>Your account is active. Redirecting you now…</p>
-          </>
-        )}
-
-        {state === 'error' && (
-          <>
-            <div style={s.icon}>❌</div>
-            <h1 style={{ ...s.h1, color: '#991b1b' }}>Verification failed</h1>
-            <p style={s.p}>{errorMsg}</p>
-            <a href="/login" style={s.btn}>Back to sign in</a>
-          </>
-        )}
-      </div>
-    </div>
+      )}
+    </AuthShell>
   )
 }
-
-export default VerifyEmailPage

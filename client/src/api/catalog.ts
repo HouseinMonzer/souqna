@@ -1,4 +1,4 @@
-import { apiFetch } from '../lib/api'
+import { ApiError, apiFetch } from '../lib/api'
 import type { Category, Product, Vendor } from '../types/database.types'
 
 export interface ProductPage {
@@ -44,7 +44,7 @@ export const catalog = {
     try {
       return (await apiFetch<{ data: Product | null }>(`/api/products/${encodeURIComponent(slug)}`, { signal })).data
     } catch (error) {
-      if (error instanceof Error && /not found/i.test(error.message)) return null
+      if (error instanceof ApiError && error.status === 404) return null
       throw error
     }
   },
@@ -56,7 +56,7 @@ export const catalog = {
     try {
       return (await apiFetch<{ data: Vendor | null }>(`/api/vendors/slug/${encodeURIComponent(slug)}`, { signal })).data
     } catch (error) {
-      if (error instanceof Error && error.name !== 'AbortError' && !/network/i.test(error.message)) return null
+      if (error instanceof ApiError && error.status === 404) return null
       throw error
     }
   },

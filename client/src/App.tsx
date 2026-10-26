@@ -28,6 +28,12 @@ const ContactPage = lazy(() => import('./pages/ContactPage'))
 const PrivacyPage = lazy(() => import('./pages/PrivacyPage'))
 const TermsPage = lazy(() => import('./pages/TermsPage'))
 const NotFoundPage = lazy(() => import('./pages/NotFoundPage'))
+const AccountLayout = lazy(() => import('./pages/account/AccountLayout'))
+const OrdersPage = lazy(() => import('./pages/account/OrdersPage'))
+const OrderDetailPage = lazy(() => import('./pages/account/OrderDetailPage'))
+const WishlistPage = lazy(() => import('./pages/account/WishlistPage'))
+const AddressesPage = lazy(() => import('./pages/account/AddressesPage'))
+const NotificationsPage = lazy(() => import('./pages/account/NotificationsPage'))
 // Development-only component showcase; compiled out of production builds.
 const DesignSystemPage = import.meta.env.DEV ? lazy(() => import('./pages/DesignSystemPage')) : null
 
@@ -87,8 +93,8 @@ function App() {
         <Routes>
           {/* RequireAuth redirects unauthenticated users here. */}
           <Route path="/sign-in" element={<Navigate to="/login" replace />} />
-          <Route path="/login/*" element={<AuthLayout><LoginPage /></AuthLayout>} />
-          <Route path="/register/*" element={<AuthLayout><RegisterPage /></AuthLayout>} />
+          <Route path="/login" element={<AuthLayout><LoginPage /></AuthLayout>} />
+          <Route path="/register" element={<AuthLayout><RegisterPage /></AuthLayout>} />
           <Route path="/verify-pending" element={<AuthLayout><VerifyPendingPage /></AuthLayout>} />
           <Route path="/verify-email" element={<AuthLayout><VerifyEmailPage /></AuthLayout>} />
           <Route path="/auth/callback" element={<AuthCallbackPage />} />
@@ -108,6 +114,14 @@ function App() {
             <Route path="/contact" element={<ContactPage />} />
             <Route path="/privacy" element={<PrivacyPage />} />
             <Route path="/terms" element={<TermsPage />} />
+            <Route path="/account" element={<RequireAuth><AccountLayout /></RequireAuth>}>
+              <Route index element={<Navigate to="orders" replace />} />
+              <Route path="orders" element={<OrdersPage />} />
+              <Route path="orders/:id" element={<OrderDetailPage />} />
+              <Route path="wishlist" element={<WishlistPage />} />
+              <Route path="addresses" element={<AddressesPage />} />
+              <Route path="notifications" element={<NotificationsPage />} />
+            </Route>
             <Route path="*" element={<NotFoundPage />} />
           </Route>
         </Routes>
