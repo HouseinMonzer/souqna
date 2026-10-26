@@ -249,6 +249,7 @@ function mapReview(review) {
     body: review.body,
     author_name: first ? `${first}${last ? ` ${last[0]}.` : ''}` : 'Customer',
     verified_purchase: true,
+    ...(review.product ? { product_name: review.product.name, product_slug: review.product.slug } : {}),
     created_at: review.createdAt,
     updated_at: review.updatedAt,
   }

@@ -103,7 +103,7 @@ function App() {
             <Route path="/vendors/:slug" element={<VendorProfilePage />} />
             <Route path="/dashboard" element={<RequireAuth><DashboardPage /></RequireAuth>} />
             <Route path="/subscribe" element={<SubscriptionPage />} />
-            <Route path="/checkout/:vendorId" element={<CheckoutPage />} />
+            <Route path="/checkout/:vendorId" element={<RequireAuth><CheckoutPage /></RequireAuth>} />
             <Route path="/about" element={<AboutPage />} />
             <Route path="/contact" element={<ContactPage />} />
             <Route path="/privacy" element={<PrivacyPage />} />

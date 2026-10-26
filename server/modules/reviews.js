@@ -90,6 +90,28 @@ post('/products/:productId/reviews', {
   res.status(created ? 201 : 200).json({ data: mapReview(review) })
 })
 
+get('/vendors/:vendorId/reviews', {
+  summary: "Reviews across a vendor's public products",
+  params: z.object({ vendorId: id }),
+  query: z.object(pageQuery),
+}, async (req, res) => {
+  const vendor = await prisma.vendor.findFirst({ where: { id: req.params.vendorId, status: 'active' }, select: { id: true } })
+  if (!vendor) throw notFound('Store not found')
+  const { take, skip, page, limit } = paginate(req.query, 10)
+  const where = { product: { vendorId: vendor.id, status: 'active', approvalStatus: 'approved' } }
+  const [items, total] = await Promise.all([
+    prisma.review.findMany({
+      where,
+      include: { ...reviewInclude, product: { select: { name: true, slug: true } } },
+      orderBy: [{ createdAt: 'desc' }, { id: 'asc' }],
+      skip,
+      take,
+    }),
+    prisma.review.count({ where }),
+  ])
+  res.json({ data: items.map(mapReview), total, page, limit })
+})
+
 del('/reviews/:id', {
   summary: 'Delete your review (or any review, as admin)',
   auth: true,

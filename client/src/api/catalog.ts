@@ -52,6 +52,15 @@ export const catalog = {
   related: (categoryId: string, excludeId: string, signal?: AbortSignal) =>
     apiFetch<{ data: Product[] }>(`/api/products/related${toQueryString({ categoryId, excludeId, limit: 4 })}`, { signal }).then(r => r.data),
 
+  vendor: async (slug: string, signal?: AbortSignal) => {
+    try {
+      return (await apiFetch<{ data: Vendor | null }>(`/api/vendors/slug/${encodeURIComponent(slug)}`, { signal })).data
+    } catch (error) {
+      if (error instanceof Error && error.name !== 'AbortError' && !/network/i.test(error.message)) return null
+      throw error
+    }
+  },
+
   vendors: (query: { page?: number; limit?: number; search?: string } = {}, signal?: AbortSignal) =>
     apiFetch<{ data: Vendor[]; total: number; page: number; limit: number }>(`/api/vendors${toQueryString(query)}`, { signal }),
 }
@@ -76,6 +85,9 @@ export interface ReviewPage {
 }
 
 export const reviews = {
+  forVendor: (vendorId: string, page = 1, signal?: AbortSignal) =>
+    apiFetch<{ data: (Review & { product_name?: string; product_slug?: string })[]; total: number; page: number; limit: number }>(
+      `/api/vendors/${vendorId}/reviews?page=${page}`, { signal }),
   list: (productId: string, page = 1, signal?: AbortSignal) =>
     apiFetch<ReviewPage>(`/api/products/${productId}/reviews?page=${page}`, { signal }),
   submit: (productId: string, body: { rating: number; title?: string; body?: string }) =>

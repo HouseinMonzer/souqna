@@ -16,8 +16,10 @@ export interface AvatarProps extends VariantProps<typeof avatarVariants> {
   className?: string
 }
 
+// First letter of the first two words; symbols such as "&" are skipped.
 const initials = (name: string) =>
-  name.trim().split(/\s+/).slice(0, 2).map(part => [...part][0] ?? '').join('').toUpperCase() || '?'
+  name.trim().split(/\s+/).filter(part => /\p{L}|\p{N}/u.test(part)).slice(0, 2)
+    .map(part => [...part].find(ch => /\p{L}|\p{N}/u.test(ch)) ?? '').join('').toUpperCase() || '?'
 
 export function Avatar({ src, name, size, shape, className }: AvatarProps) {
   const [failedSrc, setFailedSrc] = useState<string | null>(null)

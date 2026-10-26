@@ -1,231 +1,85 @@
-import { useNavigate, Link } from 'react-router-dom'
+import { Link } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
+import { ImageOff, ShoppingBag, Trash2 } from 'lucide-react'
+import { Avatar, Breadcrumbs, Button, EmptyState, IconButton, PriceTag, QuantityStepper, formatPrice } from '../components/ui'
+import { Container } from '../components/layout/Container'
 import { useCartStore } from '../store/cartStore'
-import { useAuthStore } from '../store/authStore'
-import { EmptyState } from '../components/ui'
-import { useIsMobile } from '../hooks/useMediaQuery'
+import { usePageTitle } from '../hooks/usePageTitle'
 
-function CartPage() {
-  const { t, i18n } = useTranslation()
-  const isRTL = i18n.language?.startsWith('ar')
-  document.title = `${t('cart.title')} | SouQna`
-  const navigate = useNavigate()
-  const user = useAuthStore(s => s.user)
-  const { vendorCarts, removeItem, updateQty, clearCart, total, vendorTotal } = useCartStore()
-  const isMobile = useIsMobile()
-  const totalCount = vendorCarts.reduce((s, vc) => s + vc.items.reduce((ss, i) => ss + i.quantity, 0), 0)
+export default function CartPage() {
+  const { t } = useTranslation()
+  usePageTitle(t('cart.title'))
+  const vendorCarts = useCartStore(s => s.vendorCarts)
+  const updateQty = useCartStore(s => s.updateQty)
+  const removeItem = useCartStore(s => s.removeItem)
+  const count = useCartStore(s => s.itemCount())
 
-  if (vendorCarts.length === 0) {
+  if (!vendorCarts.length) {
     return (
-      <div style={{ backgroundColor: '#F7F2E8', minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center' }} dir={isRTL ? 'rtl' : 'ltr'}>
+      <Container className="py-16">
         <EmptyState
-          icon="🛒"
+          icon={<ShoppingBag />}
           title={t('cart.empty')}
-          message={t('hero.subtitle')}
-          action={() => navigate('/shop')}
-          actionLabel={t('cart.startShopping')}
+          message={t('cart.emptyText')}
+          action={<Button asChild><Link to="/shop">{t('cart.startShopping')}</Link></Button>}
         />
-      </div>
+      </Container>
     )
   }
 
   return (
-    <div style={{ backgroundColor: '#F7F2E8', minHeight: '100vh' }} dir={isRTL ? 'rtl' : 'ltr'}>
-
-      {/* Header */}
-      <div style={{ backgroundColor: '#2D4A1E', padding: '32px 24px' }}>
-        <div style={{ maxWidth: '960px', margin: '0 auto', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <div>
-            <h1 style={{ color: '#F7F2E8', fontFamily: 'Georgia, serif', fontSize: '28px', fontWeight: '700', marginBottom: '2px' }}>
-              {t('cart.title')}
-            </h1>
-            <p style={{ color: 'rgba(247,242,232,0.65)', fontSize: '13px' }}>
-              {totalCount} · {vendorCarts.length} {t('vendors.title').toLowerCase()}
-            </p>
-          </div>
-          <button onClick={clearCart} style={{
-            background: 'rgba(255,255,255,0.08)', border: '1px solid rgba(255,255,255,0.2)',
-            color: 'rgba(255,255,255,0.7)', borderRadius: '8px', padding: '8px 16px',
-            fontSize: '13px', cursor: 'pointer', transition: 'all 0.2s',
-          }}
-            onMouseEnter={e => e.currentTarget.style.backgroundColor = 'rgba(255,255,255,0.15)'}
-            onMouseLeave={e => e.currentTarget.style.backgroundColor = 'rgba(255,255,255,0.08)'}
-          >
-            🗑 {t('common.delete')}
-          </button>
-        </div>
+    <Container className="grid gap-6 py-6 sm:py-8">
+      <Breadcrumbs items={[{ label: t('product.home'), to: '/' }, { label: t('cart.title') }]} />
+      <div className="grid gap-1">
+        <h1 className="text-3xl font-semibold">{t('cart.title')}</h1>
+        <p className="text-sm text-fg-muted">{t('cart.items', { count })} · {t('cart.perVendor')}</p>
       </div>
 
-      <div style={{ maxWidth: '960px', margin: '0 auto', padding: '32px 24px' }}>
-        <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 300px', gap: '24px', alignItems: 'start' }}>
-
-          {/* Left: Vendor carts */}
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
-            {vendorCarts.map(vc => (
-              <div key={vc.vendorId} style={{
-                backgroundColor: '#fff', borderRadius: '16px',
-                border: '1.5px solid #e0dbd0', overflow: 'hidden',
-                boxShadow: '0 2px 12px rgba(0,0,0,0.04)',
-              }}>
-                {/* Vendor header */}
-                <div style={{
-                  backgroundColor: '#f8faf5', borderBottom: '1.5px solid #e8f0dc',
-                  padding: '14px 20px', display: 'flex', alignItems: 'center',
-                  justifyContent: 'space-between', gap: '12px',
-                }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                    <div style={{
-                      width: '36px', height: '36px', borderRadius: '50%',
-                      backgroundColor: '#EBF2DE', overflow: 'hidden',
-                      display: 'flex', alignItems: 'center', justifyContent: 'center',
-                      fontSize: '14px', fontWeight: '700', color: '#2D4A1E', flexShrink: 0,
-                    }}>
-                      {vc.vendorLogo
-                        ? <img src={vc.vendorLogo} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-                        : vc.vendorName.slice(0, 2).toUpperCase()}
-                    </div>
-                    <div>
-                      <Link
-                        to={`/vendors/${vc.vendorSlug}`}
-                        style={{ fontSize: '15px', fontWeight: '700', color: '#1A2E0E', fontFamily: 'Georgia, serif', textDecoration: 'none' }}
-                        onMouseEnter={e => e.currentTarget.style.color = '#5C8A2E'}
-                        onMouseLeave={e => e.currentTarget.style.color = '#1A2E0E'}
-                      >
-                        🏪 {vc.vendorName}
-                      </Link>
-                      <p style={{ fontSize: '12px', color: '#7a8a6e', margin: 0 }}>
-                        {vc.items.length} item{vc.items.length !== 1 ? 's' : ''}
-                      </p>
-                    </div>
-                  </div>
-                  <div style={{ fontSize: '16px', fontWeight: '700', color: '#2D4A1E', fontFamily: 'Georgia, serif' }}>
-                    ${vendorTotal(vc.vendorId).toFixed(2)}
-                  </div>
-                </div>
-
-                {/* Items */}
-                <div style={{ padding: '12px 20px', display: 'flex', flexDirection: 'column', gap: '12px' }}>
-                  {vc.items.map(({ product, quantity, variant }) => (
-                    <div key={product.id + (variant?.id || '')} style={{
-                      display: 'flex', gap: '14px', alignItems: 'center',
-                      paddingBottom: '12px', borderBottom: '1px solid #f0ece4',
-                    }}>
-                      {/* Image */}
-                      <div style={{ width: '64px', height: '64px', borderRadius: '10px', backgroundColor: '#EBF2DE', overflow: 'hidden', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                        {product.primary_image
-                          ? <img src={product.primary_image} alt={product.name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-                          : <span style={{ fontSize: '28px' }}>📦</span>}
+      <div className="grid gap-6">
+        {vendorCarts.map(cart => {
+          const subtotal = cart.items.reduce((sum, item) => sum + item.product.price * item.quantity, 0)
+          return (
+            <section key={cart.vendorId} aria-labelledby={`vendor-${cart.vendorId}`} className="overflow-hidden rounded-lg border border-border bg-surface">
+              <header className="flex items-center gap-3 border-b border-border bg-surface-muted px-4 py-3">
+                <Avatar name={cart.vendorName} src={cart.vendorLogo} size="sm" shape="square" />
+                <h2 id={`vendor-${cart.vendorId}`} className="font-sans text-base font-semibold">
+                  {cart.vendorSlug ? <Link to={`/vendors/${cart.vendorSlug}`} className="hover:underline">{cart.vendorName}</Link> : cart.vendorName}
+                </h2>
+              </header>
+              <ul className="divide-y divide-border">
+                {cart.items.map(item => (
+                  <li key={`${item.product_id}-${item.variant_id}`} className="flex gap-3 p-4 sm:gap-4">
+                    <Link to={`/product/${item.product.slug}`} className="size-20 shrink-0 overflow-hidden rounded-md bg-surface-muted sm:size-24">
+                      {item.product.primary_image
+                        ? <img src={item.product.primary_image} alt="" className="size-full object-cover" />
+                        : <span className="flex size-full items-center justify-center text-fg-subtle"><ImageOff className="size-6" /></span>}
+                    </Link>
+                    <div className="grid min-w-0 flex-1 gap-2 sm:grid-cols-[1fr_auto] sm:items-start">
+                      <div className="grid min-w-0 gap-1">
+                        <Link to={`/product/${item.product.slug}`} className="line-clamp-2 font-semibold hover:underline">{item.product.name}</Link>
+                        {item.variant && <p className="text-sm text-fg-muted">{item.variant.option_name}: {item.variant.option_value}</p>}
+                        <PriceTag price={item.product.price} size="sm" showDiscount={false} />
                       </div>
-
-                      {/* Info */}
-                      <div style={{ flex: 1, minWidth: 0 }}>
-                        <Link to={`/product/${product.slug}`} style={{ fontSize: '14px', fontWeight: '600', color: '#1A2E0E', textDecoration: 'none', fontFamily: 'Georgia, serif', display: 'block', marginBottom: '3px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                          {product.name}
-                        </Link>
-                        {variant && <p style={{ fontSize: '12px', color: '#7a8a6e', margin: '0 0 6px' }}>{variant.option_name}: {variant.option_value}</p>}
-
-                        {/* Qty controls */}
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                          <button
-                            onClick={() => updateQty(product.id, quantity - 1, variant?.id ?? null)}
-                            style={{ width: '26px', height: '26px', borderRadius: '50%', border: '1.5px solid #e0dbd0', backgroundColor: '#fff', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '14px', color: '#1A2E0E' }}
-                          >−</button>
-                          <span style={{ fontSize: '14px', fontWeight: '600', color: '#1A2E0E', minWidth: '18px', textAlign: 'center' }}>{quantity}</span>
-                          <button
-                            onClick={() => updateQty(product.id, quantity + 1, variant?.id ?? null)}
-                            style={{ width: '26px', height: '26px', borderRadius: '50%', border: '1.5px solid #e0dbd0', backgroundColor: '#fff', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '14px', color: '#1A2E0E' }}
-                          >+</button>
-                        </div>
-                      </div>
-
-                      {/* Price + Remove */}
-                      <div style={{ textAlign: 'right', flexShrink: 0 }}>
-                        <p style={{ fontSize: '16px', fontWeight: '700', color: '#1A2E0E', fontFamily: 'Georgia, serif', margin: '0 0 6px' }}>
-                          ${(product.price * quantity).toFixed(2)}
-                        </p>
-                        <button
-                          onClick={() => removeItem(product.id, variant?.id ?? null)}
-                          style={{ background: 'none', border: 'none', color: '#ef4444', fontSize: '12px', cursor: 'pointer', padding: 0, fontWeight: '600' }}
-                        >{t('cart.remove')}</button>
+                      <div className="flex items-center gap-2 sm:justify-end">
+                        <QuantityStepper size="sm" value={item.quantity} max={99} onChange={qty => updateQty(item.product_id, qty, item.variant_id)} />
+                        <IconButton label={t('cart.remove', { name: item.product.name })} icon={<Trash2 />} size="icon-sm" onClick={() => removeItem(item.product_id, item.variant_id)} />
                       </div>
                     </div>
-                  ))}
+                  </li>
+                ))}
+              </ul>
+              <footer className="flex flex-wrap items-center justify-between gap-3 border-t border-border px-4 py-4">
+                <div className="grid">
+                  <span className="text-sm text-fg-muted">{t('cart.subtotal')}</span>
+                  <bdi className="text-xl font-bold tabular-nums">{formatPrice(subtotal)}</bdi>
                 </div>
-
-                {/* Per-vendor checkout */}
-                <div style={{ padding: '14px 20px', borderTop: '1.5px solid #e8f0dc', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '12px', flexWrap: 'wrap', backgroundColor: '#fafdf5' }}>
-                  <div>
-                    <span style={{ fontSize: '13px', color: '#7a8a6e' }}>{t('cart.subtotal')}</span>
-                    <p style={{ fontSize: '18px', fontWeight: '700', color: '#1A2E0E', fontFamily: 'Georgia, serif', margin: '2px 0 0' }}>
-                      ${vendorTotal(vc.vendorId).toFixed(2)}
-                    </p>
-                  </div>
-                  <button
-                    onClick={() => user ? navigate(`/checkout/${vc.vendorId}`) : navigate('/sign-in')}
-                    style={{
-                      backgroundColor: '#2D4A1E', color: '#fff', border: 'none',
-                      borderRadius: '10px', padding: '11px 22px', fontSize: '14px',
-                      fontWeight: '600', cursor: 'pointer', transition: 'background 0.2s',
-                    }}
-                    onMouseEnter={e => e.currentTarget.style.backgroundColor = '#5C8A2E'}
-                    onMouseLeave={e => e.currentTarget.style.backgroundColor = '#2D4A1E'}
-                  >
-                    {t('cart.checkout', { vendor: vc.vendorName })} {isRTL ? '←' : '→'}
-                  </button>
-                </div>
-              </div>
-            ))}
-
-            <Link to="/shop" style={{ fontSize: '14px', color: '#7a8a6e', textAlign: 'center', display: 'block', padding: '10px', textDecoration: 'none' }}>
-              {isRTL ? '→' : '←'} {t('cart.startShopping')}
-            </Link>
-          </div>
-
-          {/* Right: Grand total */}
-          <div style={{ backgroundColor: '#fff', borderRadius: '16px', border: '1.5px solid #e0dbd0', padding: '22px', position: isMobile ? 'static' : 'sticky', top: '90px', boxShadow: '0 4px 20px rgba(0,0,0,0.06)', width: '100%', boxSizing: 'border-box' }}>
-            <h3 style={{ fontFamily: 'Georgia, serif', fontSize: '18px', color: '#1A2E0E', marginBottom: '18px' }}>
-              {t('cart.title')}
-            </h3>
-
-            {/* Per-vendor breakdown */}
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', marginBottom: '16px' }}>
-              {vendorCarts.map(vc => (
-                <div key={vc.vendorId} style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px' }}>
-                  <span style={{ color: '#5C8A2E', fontWeight: '600' }}>🏪 {vc.vendorName}</span>
-                  <span style={{ color: '#1A2E0E', fontWeight: '600' }}>${vendorTotal(vc.vendorId).toFixed(2)}</span>
-                </div>
-              ))}
-            </div>
-
-            <div style={{ borderTop: '1.5px solid #e0dbd0', paddingTop: '14px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
-              <span style={{ fontSize: '16px', fontWeight: '700', color: '#1A2E0E' }}>{t('cart.subtotal')}</span>
-              <span style={{ fontSize: '24px', fontWeight: '700', color: '#2D4A1E', fontFamily: 'Georgia, serif' }}>
-                ${total().toFixed(2)}
-              </span>
-            </div>
-
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-              {vendorCarts.map(vc => (
-                <button
-                  key={vc.vendorId}
-                  onClick={() => user ? navigate(`/checkout/${vc.vendorId}`) : navigate('/sign-in')}
-                  style={{
-                    width: '100%', backgroundColor: '#2D4A1E', color: '#fff',
-                    border: 'none', borderRadius: '8px', padding: '12px',
-                    fontSize: '13px', fontWeight: '600', cursor: 'pointer', transition: 'background 0.2s',
-                  }}
-                  onMouseEnter={e => e.currentTarget.style.backgroundColor = '#5C8A2E'}
-                  onMouseLeave={e => e.currentTarget.style.backgroundColor = '#2D4A1E'}
-                >
-                  {t('cart.checkout', { vendor: vc.vendorName })} (${vendorTotal(vc.vendorId).toFixed(2)})
-                </button>
-              ))}
-            </div>
-          </div>
-        </div>
+                <Button asChild variant="accent" size="lg"><Link to={`/checkout/${cart.vendorId}`}>{t('cart.checkout')}</Link></Button>
+              </footer>
+            </section>
+          )
+        })}
       </div>
-    </div>
+      <Button asChild variant="link" className="justify-self-start"><Link to="/shop">{t('cart.continue')}</Link></Button>
+    </Container>
   )
 }
-
-export default CartPage

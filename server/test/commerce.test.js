@@ -311,6 +311,13 @@ describe('reviews', () => {
     assert.equal(list.body.summary.breakdown[2], 1)
   })
 
+  it('lists reviews across a vendor\'s products', async () => {
+    const res = await request(app).get(`/api/vendors/${vendor.user.vendor.id}/reviews`)
+    assert.equal(res.status, 200)
+    assert.equal(res.body.total, 1)
+    assert.equal(res.body.data[0].product_slug, product.slug)
+  })
+
   it('lets only the author delete a review', async () => {
     const { id } = await prisma.review.findFirstOrThrow({ where: { productId: product.id } })
     const stranger = await request(app).delete(`/api/reviews/${id}`).set('Cookie', browser.cookie)
