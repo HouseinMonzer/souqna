@@ -1,11 +1,12 @@
-import React, { lazy, Suspense } from 'react'
-import { useEffect } from 'react'
-import { BrowserRouter, Routes, Route, Outlet, Navigate } from 'react-router-dom'
-import Navbar from './components/Navbar'
-import Footer from './components/home/Footer'
+import { lazy, Suspense, useEffect, type ReactNode } from 'react'
+import { BrowserRouter, Routes, Route, Outlet, Navigate, useLocation } from 'react-router-dom'
+import { Navbar, MobileTabBar } from './components/layout/Navbar'
+import { Footer } from './components/layout/Footer'
+import { Spinner } from './components/ui'
 import HomePage from './pages/HomePage'
 import RequireAuth from './components/RequireAuth'
 import { useAuthStore } from './store/authStore'
+import { useWishlistStore } from './store/wishlistStore'
 
 // Lazy-load every non-home route. Each becomes its own JS chunk fetched on demand.
 const ShopPage = lazy(() => import('./pages/ShopPage'))
@@ -26,48 +27,62 @@ const AboutPage = lazy(() => import('./pages/AboutPage'))
 const ContactPage = lazy(() => import('./pages/ContactPage'))
 const PrivacyPage = lazy(() => import('./pages/PrivacyPage'))
 const TermsPage = lazy(() => import('./pages/TermsPage'))
+const NotFoundPage = lazy(() => import('./pages/NotFoundPage'))
 // Development-only component showcase; compiled out of production builds.
 const DesignSystemPage = import.meta.env.DEV ? lazy(() => import('./pages/DesignSystemPage')) : null
 
+function ScrollToTop() {
+  const { pathname } = useLocation()
+  useEffect(() => window.scrollTo(0, 0), [pathname])
+  return null
+}
+
 function MainLayout() {
   return (
-    <div style={{ backgroundColor: '#F7F2E8', minHeight: '100vh', display: 'flex', flexDirection: 'column' }}>
+    <div className="flex min-h-dvh flex-col">
       <Navbar />
-      <div style={{ flex: 1 }}>
-        <Outlet />
-      </div>
+      {/* Bottom padding keeps content clear of the mobile tab bar. */}
+      <main id="main" className="flex-1 pb-20 md:pb-0">
+        <Suspense fallback={<RouteSpinner />}>
+          <Outlet />
+        </Suspense>
+      </main>
       <Footer />
+      <MobileTabBar />
     </div>
   )
 }
 
-function AuthLayout({ children }: { children: React.ReactNode }) {
-  return (
-    <div style={{ backgroundColor: '#F7F2E8', minHeight: '100vh', display: 'flex', flexDirection: 'column' }}>
-      <div style={{ flex: 1 }}>{children}</div>
-      <Footer />
-    </div>
-  )
+function AuthLayout({ children }: { children: ReactNode }) {
+  return <main id="main" className="min-h-dvh">{children}</main>
 }
 
 function RouteSpinner() {
   return (
-    <div style={{ backgroundColor: '#F7F2E8', minHeight: '60vh', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-      <div style={{ width: '36px', height: '36px', border: '3px solid #5C8A2E', borderTopColor: 'transparent', borderRadius: '50%', animation: 'spin 0.8s linear infinite' }} />
-      <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
+    <div className="grid min-h-[60vh] place-items-center text-primary">
+      <Spinner size={32} />
     </div>
   )
 }
 
 function App() {
   const loadUser = useAuthStore(s => s.loadUser)
+  const userId = useAuthStore(s => s.user?.id)
 
   useEffect(() => {
     loadUser()
   }, [loadUser])
 
+  // Saved products follow the signed-in account.
+  useEffect(() => {
+    const wishlist = useWishlistStore.getState()
+    if (userId) wishlist.load().catch(() => {})
+    else wishlist.reset()
+  }, [userId])
+
   return (
     <BrowserRouter>
+      <ScrollToTop />
       <Suspense fallback={<RouteSpinner />}>
         <Routes>
           {/* RequireAuth redirects unauthenticated users here. */}
@@ -93,6 +108,7 @@ function App() {
             <Route path="/contact" element={<ContactPage />} />
             <Route path="/privacy" element={<PrivacyPage />} />
             <Route path="/terms" element={<TermsPage />} />
+            <Route path="*" element={<NotFoundPage />} />
           </Route>
         </Routes>
       </Suspense>
